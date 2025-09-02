@@ -344,9 +344,16 @@ def customer_register(request: HttpRequest):
     else:
         context["form"] = CustomerStep4Form()
         context["vehicle_form"] = VehicleForm()
-        # Prefill order type based on intent
+        # Include previous steps for summary
+        context["step1"] = request.session.get("reg_step1", {})
+        context["step2"] = session_step2
+        context["step3"] = request.session.get("reg_step3", {})
+        # Prefill order type based on intent and selected services
         type_map = {"service": "service", "sales": "sales", "inquiry": "consultation"}
         order_initial = {"type": type_map.get(intent)} if intent in type_map else {}
+        sel_services = context["step3"].get("service_type") or []
+        if sel_services:
+            order_initial["service_selection"] = sel_services
         context["order_form"] = OrderForm(initial=order_initial)
     return render(request, "tracker/customer_register.html", context)
 
