@@ -53,6 +53,16 @@ class Customer(models.Model):
     def __str__(self):
         return f"{self.full_name} ({self.code})"
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["full_name"], name="idx_cust_name"),
+            models.Index(fields=["phone"], name="idx_cust_phone"),
+            models.Index(fields=["email"], name="idx_cust_email"),
+            models.Index(fields=["registration_date"], name="idx_cust_reg"),
+            models.Index(fields=["last_visit"], name="idx_cust_lastvisit"),
+            models.Index(fields=["customer_type"], name="idx_cust_type"),
+        ]
+
 
 class Vehicle(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="vehicles")
@@ -63,6 +73,12 @@ class Vehicle(models.Model):
 
     def __str__(self):
         return f"{self.plate_number} - {self.make or ''} {self.model or ''}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["customer"], name="idx_vehicle_customer"),
+            models.Index(fields=["plate_number"], name="idx_vehicle_plate"),
+        ]
 
 
 class Order(models.Model):
@@ -126,6 +142,17 @@ class Order(models.Model):
     def __str__(self):
         return f"{self.order_number} - {self.customer.full_name}"
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["status"], name="idx_order_status"),
+            models.Index(fields=["type"], name="idx_order_type"),
+            models.Index(fields=["priority"], name="idx_order_priority"),
+            models.Index(fields=["created_at"], name="idx_order_created"),
+            models.Index(fields=["completed_at"], name="idx_order_completed"),
+            models.Index(fields=["customer", "created_at"], name="idx_order_cust_created"),
+            models.Index(fields=["type", "status"], name="idx_order_type_status"),
+        ]
+
 
 class InventoryItem(models.Model):
     name = models.CharField(max_length=128)
@@ -136,3 +163,11 @@ class InventoryItem(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.brand or ''})"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["name"], name="idx_item_name"),
+            models.Index(fields=["brand"], name="idx_item_brand"),
+            models.Index(fields=["name", "brand"], name="idx_item_name_brand"),
+            models.Index(fields=["created_at"], name="idx_item_created"),
+        ]
