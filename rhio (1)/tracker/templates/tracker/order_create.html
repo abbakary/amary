@@ -1,0 +1,676 @@
+{% extends 'tracker/base.html' %}
+{% load static %}
+{% block title %}New Order{% if customer %} - {{ customer.full_name }}{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/vendors/select2.css' %}">
+<link rel="stylesheet" href="{% static 'css/vendors/flatpickr/flatpickr.min.css' %}">
+<style>
+  .customer-info-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+  }
+  .order-section {
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+  }
+  .order-section.active {
+    border-color: var(--bs-primary);
+    box-shadow: 0 4px 12px rgba(0,123,255,0.15);
+  }
+  .section-header {
+    background: var(--bs-primary);
+    color: white;
+    margin: -1rem -1rem 1rem -1rem;
+    padding: 1rem;
+    border-radius: 8px 8px 0 0;
+  }
+  .section-header.service {
+    background: linear-gradient(135deg, #28a745, #20c997);
+  }
+  .section-header.sales {
+    background: linear-gradient(135deg, #fd7e14, #e83e8c);
+  }
+  .section-header.consultation {
+    background: linear-gradient(135deg, #17a2b8, #6f42c1);
+  }
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+  .form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+  }
+  .order-type-selector {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .type-card {
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .type-card:hover {
+    border-color: var(--bs-primary);
+    transform: translateY(-2px);
+  }
+  .type-card.selected {
+    border-color: var(--bs-primary);
+    background: rgba(0,123,255,0.05);
+  }
+  .priority-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .priority-low { background: #d1ecf1; color: #0c5460; }
+  .priority-normal { background: #d4edda; color: #155724; }
+  .priority-high { background: #fff3cd; color: #856404; }
+  .priority-urgent { background: #f8d7da; color: #721c24; }
+  .stock-info {
+    padding: 0.75rem;
+    background: #e3f2fd;
+    border-radius: 6px;
+    margin-top: 0.5rem;
+  }
+  .vehicle-preview {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Page Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="mb-1">Create New Order</h3>
+      <p class="text-muted mb-0">Set up a new service, sales, or consultation order</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'tracker:orders_list' %}" class="btn btn-outline-secondary">
+        <i data-feather="list" class="me-1"></i>All Orders
+      </a>
+      {% if not customer %}
+      <a href="{% url 'tracker:customer_register' %}" class="btn btn-outline-primary">
+        <i data-feather="user-plus" class="me-1"></i>New Customer
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Customer Information Card -->
+  {% if customer %}
+    <div class="customer-info-card card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h5 class="mb-2">
+              <i data-feather="user" class="me-2"></i>{{ customer.full_name }}
+            </h5>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <small class="opacity-75">Phone:</small><br>
+                <strong>{{ customer.phone }}</strong>
+              </div>
+              {% if customer.email %}
+              <div class="col-md-4">
+                <small class="opacity-75">Email:</small><br>
+                <strong>{{ customer.email }}</strong>
+              </div>
+              {% endif %}
+              <div class="col-md-4">
+                <small class="opacity-75">Customer Since:</small><br>
+                <strong>{{ customer.created_at|date:"M d, Y" }}</strong>
+              </div>
+            </div>
+          </div>
+          <div class="text-end">
+            <div class="badge bg-light text-dark mb-2">{{ customer.customer_code }}</div><br>
+            <small class="opacity-75">Total Visits: {{ customer.total_visits|default:0 }}</small><br>
+            <small class="opacity-75">Last Visit: {{ customer.last_visit|date:"M d"|default:"Never" }}</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="alert alert-warning">
+      <div class="d-flex align-items-center">
+        <i data-feather="alert-triangle" class="me-2"></i>
+        <div>
+          <strong>No Customer Selected</strong><br>
+          <small>Please select a customer from the <a href="{% url 'tracker:customers_list' %}">Customers page</a> or pass ?customer=&lt;id&gt; to this URL.</small>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Order Form -->
+  <form method="post" class="card shadow-sm">
+    <div class="card-body">
+      {% csrf_token %}
+      
+      {% if customer %}
+        <input type="hidden" name="customer_id" value="{{ customer.id }}">
+      {% endif %}
+
+      <!-- Order Type Selection -->
+      <div class="form-group">
+        <h5 class="mb-3">
+          <i data-feather="clipboard" class="me-1"></i>Order Type
+        </h5>
+        <div class="order-type-selector" id="orderTypeSelector">
+          <div class="type-card" data-type="service">
+            <div class="mb-2">
+              <i data-feather="tool" class="feather-32 text-primary"></i>
+            </div>
+            <h6>Car Service</h6>
+            <small class="text-muted">Maintenance, repairs, diagnostics</small>
+            <input type="radio" name="type" value="service" class="d-none">
+          </div>
+          <div class="type-card" data-type="sales">
+            <div class="mb-2">
+              <i data-feather="shopping-cart" class="feather-32 text-success"></i>
+            </div>
+            <h6>Tire Sales</h6>
+            <small class="text-muted">Tires, parts, accessories</small>
+            <input type="radio" name="type" value="sales" class="d-none">
+          </div>
+          <div class="type-card" data-type="consultation">
+            <div class="mb-2">
+              <i data-feather="message-circle" class="feather-32 text-info"></i>
+            </div>
+            <h6>Consultation</h6>
+            <small class="text-muted">Inquiries, pricing, advice</small>
+            <input type="radio" name="type" value="consultation" class="d-none">
+          </div>
+        </div>
+      </div>
+
+      <!-- Order Basics -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <div class="form-group">
+            <label class="form-label">Priority Level</label>
+            {{ form.priority }}
+            <div class="form-text">How urgent is this order?</div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="form-group">
+            <label class="form-label">Vehicle</label>
+            {{ form.vehicle }}
+            {% if customer and customer.vehicles.exists %}
+              <div class="form-text">Select from customer's vehicles</div>
+            {% else %}
+              <div class="form-text">No vehicles on file for this customer</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Vehicle Preview -->
+      <div id="vehiclePreview" class="vehicle-preview" style="display: none;">
+        <h6><i data-feather="truck" class="me-1"></i>Selected Vehicle</h6>
+        <div id="vehicleDetails"></div>
+      </div>
+
+      <!-- Dynamic Order Details Sections -->
+      <div class="row g-3">
+        <!-- Service Details -->
+        <div class="col-12">
+          <div class="order-section card" data-section="service" style="display: none;">
+            <div class="card-body">
+              <div class="section-header service">
+                <h5 class="mb-0">
+                  <i data-feather="tool" class="me-2"></i>Service Details
+                </h5>
+              </div>
+              
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="form-label">Service Selection</label>
+                    {{ form.service_selection }}
+                    <div class="form-text">Select all services needed</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="form-label">Estimated Duration (minutes)</label>
+                    {{ form.estimated_duration }}
+                    <div class="form-text">How long will this take?</div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="form-group">
+                    <label class="form-label">Problem Description</label>
+                    {{ form.description }}
+                    <div class="form-text">Describe the issue or service needed</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sales Details -->
+        <div class="col-12">
+          <div class="order-section card" data-section="sales" style="display: none;">
+            <div class="card-body">
+              <div class="section-header sales">
+                <h5 class="mb-0">
+                  <i data-feather="shopping-cart" class="me-2"></i>Sales Details
+                </h5>
+              </div>
+              
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="form-label">Item Name</label>
+                    {{ form.item_name }}
+                    <div class="form-text">Select tire type</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="form-label">Brand</label>
+                    {{ form.brand }}
+                    <div id="brandStock" class="form-text">Choose brand after selecting item</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="form-label">Quantity</label>
+                    {{ form.quantity }}
+                    <div class="form-text">Number of items needed</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="form-label">Tire Condition</label>
+                    {{ form.tire_type }}
+                    <div class="form-text">New, used, or refurbished</div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Stock Information -->
+              <div id="stockInfo" class="stock-info" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <small class="fw-semibold">Stock Status:</small>
+                    <span id="stockText">Checking availability...</span>
+                  </div>
+                  <div id="stockBadge"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Consultation Details -->
+        <div class="col-12">
+          <div class="order-section card" data-section="consultation" style="display: none;">
+            <div class="card-body">
+              <div class="section-header consultation">
+                <h5 class="mb-0">
+                  <i data-feather="message-circle" class="me-2"></i>Consultation Details
+                </h5>
+              </div>
+              
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="form-label">Inquiry Type</label>
+                    {{ form.inquiry_type }}
+                    <div class="form-text">What type of inquiry is this?</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="form-label">Contact Preference</label>
+                    {{ form.contact_preference }}
+                    <div class="form-text">How should we follow up?</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="form-label">Follow-up Date (Optional)</label>
+                    {{ form.follow_up_date }}
+                    <div class="form-text">When should we contact you?</div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="form-group">
+                    <label class="form-label">Questions/Comments</label>
+                    {{ form.questions }}
+                    <div class="form-text">Please provide details about your inquiry</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="d-flex justify-content-between mt-4">
+        <div class="d-flex gap-2">
+          {% if customer %}
+            <a class="btn btn-outline-secondary" href="{% url 'tracker:customer_detail' customer.id %}">
+              <i data-feather="arrow-left" class="me-1"></i>Back to Customer
+            </a>
+          {% else %}
+            <a class="btn btn-outline-secondary" href="{% url 'tracker:orders_list' %}">
+              <i data-feather="arrow-left" class="me-1"></i>Cancel
+            </a>
+          {% endif %}
+        </div>
+        
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-primary" id="draftBtn">
+            <i data-feather="save" class="me-1"></i>Save Draft
+          </button>
+          {% if customer %}
+            <button class="btn btn-primary btn-lg" type="submit">
+              <i data-feather="plus-circle" class="me-1"></i>Create Order
+            </button>
+          {% else %}
+            <button class="btn btn-primary btn-lg" formaction="{% url 'tracker:order_start' %}" type="submit" disabled>
+              <i data-feather="plus-circle" class="me-1"></i>Create Order
+            </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/select2/select2.full.min.js' %}"></script>
+<script src="{% static 'js/flat-pickr/flatpickr.js' %}"></script>
+<script>
+(function(){
+  'use strict';
+  
+  // Initialize plugins
+  const $ = window.jQuery;
+  if ($ && $.fn.select2) {
+    $('select').select2({ width: '100%' });
+  }
+  if (window.flatpickr) {
+    document.querySelectorAll('input[type="date"]').forEach(el => 
+      flatpickr(el, {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "F j, Y"
+      })
+    );
+  }
+
+  // Order type selection
+  const typeCards = document.querySelectorAll('.type-card');
+  const orderSections = document.querySelectorAll('.order-section');
+  
+  typeCards.forEach(card => {
+    const radio = card.querySelector('input[type="radio"]');
+    card.addEventListener('click', () => {
+      // Clear previous selections
+      typeCards.forEach(c => c.classList.remove('selected'));
+      orderSections.forEach(s => s.style.display = 'none');
+      
+      // Select current card
+      card.classList.add('selected');
+      if (radio) radio.checked = true;
+      
+      // Show corresponding section
+      const type = card.dataset.type;
+      const section = document.querySelector(`[data-section="${type}"]`);
+      if (section) {
+        section.style.display = '';
+        section.classList.add('active');
+      }
+    });
+    
+    // Initialize if already selected
+    if (radio?.checked) {
+      card.classList.add('selected');
+      const section = document.querySelector(`[data-section="${card.dataset.type}"]`);
+      if (section) {
+        section.style.display = '';
+        section.classList.add('active');
+      }
+    }
+  });
+
+  // Vehicle preview
+  const vehicleSelect = document.querySelector('[name="vehicle"]');
+  const vehiclePreview = document.getElementById('vehiclePreview');
+  const vehicleDetails = document.getElementById('vehicleDetails');
+  
+  if (vehicleSelect) {
+    vehicleSelect.addEventListener('change', async () => {
+      const vehicleId = vehicleSelect.value;
+      if (!vehicleId) {
+        vehiclePreview.style.display = 'none';
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/vehicle/${vehicleId}/`, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await response.json();
+        
+        if (data.vehicle) {
+          const v = data.vehicle;
+          vehicleDetails.innerHTML = `
+            <div class="row g-2">
+              <div class="col-md-3"><strong>Plate:</strong> ${v.plate_number}</div>
+              <div class="col-md-3"><strong>Make:</strong> ${v.make}</div>
+              <div class="col-md-3"><strong>Model:</strong> ${v.model}</div>
+              <div class="col-md-3"><strong>Type:</strong> ${v.vehicle_type}</div>
+            </div>
+          `;
+          vehiclePreview.style.display = '';
+        }
+      } catch (e) {
+        console.warn('Could not fetch vehicle details:', e);
+      }
+    });
+  }
+
+  // Stock checking for sales
+  const itemSelect = document.querySelector('[name="item_name"]');
+  const brandSelect = document.querySelector('[name="brand"]');
+  const qtyInput = document.querySelector('[name="quantity"]');
+  const stockInfo = document.getElementById('stockInfo');
+  const stockText = document.getElementById('stockText');
+  const stockBadge = document.getElementById('stockBadge');
+  const brandStock = document.getElementById('brandStock');
+
+  async function fetchJSON(url) {
+    try {
+      const response = await fetch(url, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      return await response.json();
+    } catch (e) {
+      console.warn('Fetch error:', e);
+      return {};
+    }
+  }
+
+  async function loadBrands() {
+    if (!itemSelect || !brandSelect) return;
+    const itemName = itemSelect.value;
+    
+    if (!itemName) {
+      brandSelect.innerHTML = '<option value="">Select item first</option>';
+      if (brandStock) brandStock.textContent = 'Choose brand after selecting item';
+      return;
+    }
+
+    try {
+      const data = await fetchJSON(`{% url 'tracker:api_inventory_brands' %}?name=${encodeURIComponent(itemName)}`);
+      const brands = data.brands || [];
+      
+      brandSelect.innerHTML = '<option value="">Select brand</option>' + 
+        brands.map(b => `<option value="${b.brand}">${b.brand} (${b.quantity} available)</option>`).join('');
+      
+      if ($ && $.fn.select2) {
+        $(brandSelect).trigger('change.select2');
+      }
+      
+      if (brandStock) {
+        brandStock.textContent = brands.length > 0 ? 
+          `${brands.length} brands available` : 'No brands in stock';
+      }
+    } catch (e) {
+      console.warn('Could not load brands:', e);
+    }
+  }
+
+  async function checkStock() {
+    if (!itemSelect || !brandSelect || !stockInfo) return;
+    
+    const itemName = itemSelect.value;
+    const brand = brandSelect.value;
+    const qty = parseInt(qtyInput?.value || 1);
+    
+    if (!itemName || !brand) {
+      stockInfo.style.display = 'none';
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({ name: itemName, brand: brand });
+      const data = await fetchJSON(`{% url 'tracker:api_inventory_stock' %}?${params.toString()}`);
+      const available = data.available || 0;
+      
+      stockText.textContent = `${available} units available`;
+      
+      let badgeClass = 'badge ';
+      let badgeText = '';
+      
+      if (available === 0) {
+        badgeClass += 'bg-danger';
+        badgeText = 'Out of Stock';
+      } else if (available < qty) {
+        badgeClass += 'bg-warning text-dark';
+        badgeText = 'Insufficient Stock';
+      } else if (available < 5) {
+        badgeClass += 'bg-warning text-dark';
+        badgeText = 'Low Stock';
+      } else {
+        badgeClass += 'bg-success';
+        badgeText = 'In Stock';
+      }
+      
+      stockBadge.innerHTML = `<span class="${badgeClass}">${badgeText}</span>`;
+      stockInfo.style.display = '';
+    } catch (e) {
+      console.warn('Could not check stock:', e);
+    }
+  }
+
+  if (itemSelect) {
+    itemSelect.addEventListener('change', () => {
+      loadBrands();
+      checkStock();
+    });
+  }
+  
+  if (brandSelect) {
+    brandSelect.addEventListener('change', checkStock);
+  }
+  
+  if (qtyInput) {
+    qtyInput.addEventListener('input', debounce(checkStock, 300));
+  }
+
+  // Initialize stock checking
+  loadBrands();
+  
+  // Draft saving
+  const form = document.querySelector('form');
+  const draftBtn = document.getElementById('draftBtn');
+  
+  if (draftBtn) {
+    draftBtn.addEventListener('click', () => {
+      const formData = new FormData(form);
+      const draftData = {};
+      
+      for (let [key, value] of formData.entries()) {
+        draftData[key] = value;
+      }
+      
+      localStorage.setItem('order_draft', JSON.stringify({
+        data: draftData,
+        timestamp: new Date().toISOString()
+      }));
+      
+      // Show feedback
+      if (window.bootstrap && document.getElementById('feedbackModal')) {
+        document.getElementById('feedbackTitle').textContent = 'Draft Saved';
+        document.getElementById('feedbackText').textContent = 'Your order draft has been saved locally.';
+        const modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
+        modal.show();
+      }
+    });
+  }
+
+  // Load draft on page load
+  try {
+    const draft = JSON.parse(localStorage.getItem('order_draft') || '{}');
+    if (draft.data) {
+      Object.entries(draft.data).forEach(([name, value]) => {
+        const input = form.querySelector(`[name="${name}"]`);
+        if (input) {
+          if (input.type === 'checkbox' || input.type === 'radio') {
+            input.checked = !!value;
+          } else {
+            input.value = value;
+          }
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('Could not load draft:', e);
+  }
+
+  // Utility function
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // Initialize feather icons
+  if (window.feather) {
+    feather.replace();
+  }
+
+})();
+</script>
+{% endblock %}

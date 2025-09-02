@@ -1,0 +1,59 @@
+{% extends 'tracker/base.html' %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Analytics Overview</h4>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'tracker:reports' %}">Go to Reports</a>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-3"><div class="card h-100"><div class="card-header"><h6 class="mb-0">By Status</h6></div><div class="card-body"><div id="statusChart"></div></div></div></div>
+    <div class="col-lg-3"><div class="card h-100"><div class="card-header"><h6 class="mb-0">By Type</h6></div><div class="card-body"><div id="typeChart"></div></div></div></div>
+    <div class="col-lg-3"><div class="card h-100"><div class="card-header"><h6 class="mb-0">By Priority</h6></div><div class="card-body"><div id="priorityChart"></div></div></div></div>
+    <div class="col-lg-3"><div class="card h-100"><div class="card-header"><h6 class="mb-0">Last 30 Days</h6></div><div class="card-body"><div id="trendChart"></div></div></div></div>
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Highlights</h5>
+          <span class="text-muted small">Updated {{ now|date:'Y-m-d H:i' }}</span>
+        </div>
+        <div class="card-body">
+          <div class="row g-3 text-center">
+            <div class="col-md-3"><div class="p-3 border rounded"><div class="text-muted">Total Orders</div><div class="display-6">{{ totals.total_orders }}</div></div></div>
+            <div class="col-md-3"><div class="p-3 border rounded"><div class="text-muted">Completed</div><div class="display-6">{{ totals.completed }}</div></div></div>
+            <div class="col-md-3"><div class="p-3 border rounded"><div class="text-muted">In Progress</div><div class="display-6">{{ totals.in_progress }}</div></div></div>
+            <div class="col-md-3"><div class="p-3 border rounded"><div class="text-muted">Customers</div><div class="display-6">{{ totals.customers }}</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script id="chartsdata" type="application/json">{{ charts_json|safe }}</script>
+<script>
+  (function(){
+    const el = document.getElementById('chartsdata');
+    if (!el) return;
+    const data = JSON.parse(el.textContent || '{}');
+    const mkOpts = (labels, series, type='donut') => ({
+      chart: { type, height: 240 }, labels, series,
+      legend: { position: 'bottom' }, dataLabels: { enabled: false }, stroke: { width: 0 }
+    });
+    if (window.ApexCharts) {
+      new ApexCharts(document.querySelector('#statusChart'), mkOpts(data.status.labels, data.status.values)).render();
+      new ApexCharts(document.querySelector('#typeChart'), mkOpts(data.type.labels, data.type.values)).render();
+      new ApexCharts(document.querySelector('#priorityChart'), mkOpts(data.priority.labels, data.priority.values)).render();
+      new ApexCharts(document.querySelector('#trendChart'), {
+        chart: { type: 'area', height: 220, toolbar: {show:false} },
+        series: [{ name: 'Orders', data: data.trend.values }],
+        xaxis: { categories: data.trend.labels, labels:{rotate:0} },
+        dataLabels: {enabled:false}, stroke:{curve:'smooth'}
+      }).render();
+    }
+  })();
+</script>
+{% endblock %}
