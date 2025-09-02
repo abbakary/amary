@@ -1,4 +1,5 @@
 {% extends 'tracker/base.html' %}
+{% extends 'tracker/base.html' %}
 {% load static %}
 {% block title %}Customer Registration{% endblock %}
 
@@ -183,11 +184,6 @@
                 <div class="text-danger small mt-1">{{ error }}</div>
               {% endfor %}
               <div class="form-text">Optional - for digital communications</div>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Customer Code</label>
-              {{ form.customer_code }}
-              <div class="form-text">Auto-generated if left empty</div>
             </div>
             <div class="col-12">
               <label class="form-label fw-semibold">Address</label>
@@ -552,7 +548,7 @@
   
   // Form draft saving
   const form = document.querySelector('form');
-  const step = {{ step|default:1 }};
+  const step = parseInt('{{ step|default:1 }}', 10);
   const key = `customer_reg_draft_step_${step}`;
   
   // Load draft
