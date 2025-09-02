@@ -624,10 +624,9 @@
   const inquiryFields = document.getElementById('inquiryFields');
   
   function updateOrderTypeFields() {
-    const type = orderTypeSelect?.value || '';
-    if (serviceFields) serviceFields.style.display = (type === 'service') ? '' : 'none';
-    if (salesFields) salesFields.style.display = (type === 'sales') ? '' : 'none';
-    if (inquiryFields) inquiryFields.style.display = (type === 'consultation') ? '' : 'none';
+    if (serviceFields) serviceFields.style.display = '';
+    if (salesFields) salesFields.style.display = '';
+    if (inquiryFields) inquiryFields.style.display = '';
   }
   
   orderTypeSelect?.addEventListener('change', updateOrderTypeFields);
