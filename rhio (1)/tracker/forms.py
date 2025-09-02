@@ -145,7 +145,7 @@ class CustomerStep3Form(forms.Form):
         ("general_maintenance", "General Maintenance"),
         ("other", "Other Service")
     ]
-    
+
     SALES_TYPE_CHOICES = [
         ("tire_sales", "Tire Sales"),
         ("parts_sales", "Auto Parts"),
@@ -154,13 +154,14 @@ class CustomerStep3Form(forms.Form):
         ("accessories", "Accessories"),
         ("other", "Other Products")
     ]
-    
-    service_type = forms.ChoiceField(
+
+    # Allow multiple service selections via checkboxes
+    service_type = forms.MultipleChoiceField(
         choices=SERVICE_TYPE_CHOICES,
         required=False,
-        widget=forms.RadioSelect(attrs={'class': 'form-check-input'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
-    
+
     sales_type = forms.ChoiceField(
         choices=SALES_TYPE_CHOICES,
         required=False,
