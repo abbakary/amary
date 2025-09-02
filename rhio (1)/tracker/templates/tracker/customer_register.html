@@ -254,24 +254,12 @@
           <div class="form-section">
             <h5 class="section-title">
               <i data-feather="tool" class="feather-16"></i>
-              Select Service Type
+              Select Services Needed
             </h5>
-            <div class="service-type-grid">
-              {% for value, label in form.service_type.field.choices %}
-                <div class="service-card" data-service="{{ value }}">
-                  <input class="form-check-input" type="radio" name="service_type" 
-                         id="service_{{ forloop.counter }}" value="{{ value }}" 
-                         {% if form.service_type.value == value %}checked{% endif %}>
-                  <label class="form-check-label ms-2 fw-semibold" for="service_{{ forloop.counter }}">
-                    {{ label }}
-                  </label>
-                  <div class="small text-muted mt-1">
-                    {% if value == 'maintenance' %}Regular service and upkeep
-                    {% elif value == 'repair' %}Fix specific issues or problems
-                    {% else %}Diagnostic and inspection services{% endif %}
-                  </div>
-                </div>
-              {% endfor %}
+            <div class="row g-2">
+              <div class="col-12">
+                {{ form.service_type }}
+              </div>
             </div>
             {% for error in form.service_type.errors %}
               <div class="text-danger small mt-2">{{ error }}</div>
@@ -337,12 +325,12 @@
           </h6>
           <div class="row">
             <div class="col-md-8">
-              <strong>{{ form.full_name.value|default:"Customer Name" }}</strong> - 
-              {{ form.phone.value|default:"Phone Number" }}
-              {% if form.email.value %}<br><small>{{ form.email.value }}</small>{% endif %}
+              <strong>{{ step1.full_name|default:"Customer Name" }}</strong> -
+              {{ step1.phone|default:"Phone Number" }}
+              {% if step1.email %}<br><small>{{ step1.email }}</small>{% endif %}
             </div>
             <div class="col-md-4 text-end">
-              <span class="badge bg-primary">{{ intent|title }} Request</span>
+              <span class="badge bg-primary">{{ intent|default:"service"|title }} Request</span>
             </div>
           </div>
         </div>
