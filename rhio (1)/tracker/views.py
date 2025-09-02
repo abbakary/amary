@@ -6,6 +6,7 @@ from django.contrib.auth.views import LoginView
 from django.urls import reverse
 from django.contrib import messages
 from django.db.models.functions import TruncDate
+from django.core.cache import cache
 import json
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User, Group
@@ -51,32 +52,55 @@ class CustomLoginView(LoginView):
 
 @login_required
 def dashboard(request: HttpRequest):
-    total_orders = Order.objects.count()
-    total_customers = Customer.objects.count()
-    status_counts_qs = Order.objects.values("status").annotate(c=Count("id"))
-    type_counts_qs = Order.objects.values("type").annotate(c=Count("id"))
-    priority_counts_qs = Order.objects.values("priority").annotate(c=Count("id"))
+    cache_key = "dashboard_metrics_v1"
+    cached = cache.get(cache_key)
+    if cached:
+        (
+            total_orders,
+            total_customers,
+            status_counts,
+            type_counts,
+            priority_counts,
+            completed_today_count,
+            trend_labels,
+            trend_values,
+            total_stock,
+        ) = cached
+    else:
+        total_orders = Order.objects.count()
+        total_customers = Customer.objects.count()
+        status_counts_qs = Order.objects.values("status").annotate(c=Count("id"))
+        type_counts_qs = Order.objects.values("type").annotate(c=Count("id"))
+        priority_counts_qs = Order.objects.values("priority").annotate(c=Count("id"))
+        status_counts = {x["status"]: x["c"] for x in status_counts_qs}
+        type_counts = {x["type"]: x["c"] for x in type_counts_qs}
+        priority_counts = {x["priority"]: x["c"] for x in priority_counts_qs}
+        today = timezone.localdate()
+        completed_today_count = Order.objects.filter(status="completed", completed_at__date=today).count()
+        dates = [today - timezone.timedelta(days=i) for i in range(13, -1, -1)]
+        trend_qs = (
+            Order.objects.annotate(day=TruncDate("created_at")).values("day").annotate(c=Count("id"))
+        )
+        trend_map = {row["day"]: row["c"] for row in trend_qs}
+        trend_labels = [d.strftime("%Y-%m-%d") for d in dates]
+        trend_values = [trend_map.get(d, 0) for d in dates]
+        total_stock = InventoryItem.objects.aggregate(total=Sum('quantity'))['total'] or 0
+        cache.set(cache_key, (
+            total_orders,
+            total_customers,
+            status_counts,
+            type_counts,
+            priority_counts,
+            completed_today_count,
+            trend_labels,
+            trend_values,
+            total_stock,
+        ), 60)
 
-    status_counts = {x["status"]: x["c"] for x in status_counts_qs}
-    type_counts = {x["type"]: x["c"] for x in type_counts_qs}
-    priority_counts = {x["priority"]: x["c"] for x in priority_counts_qs}
-
-    # KPI metrics
     today = timezone.localdate()
     pending_count = status_counts.get("created", 0)
     in_progress_count = status_counts.get("in_progress", 0)
     active_count = status_counts.get("created", 0) + status_counts.get("assigned", 0) + status_counts.get("in_progress", 0)
-    completed_today_count = Order.objects.filter(status="completed", completed_at__date=today).count()
-
-    # Trend: last 14 days orders created
-    dates = [today - timezone.timedelta(days=i) for i in range(13, -1, -1)]
-    trend_qs = (
-        Order.objects.annotate(day=TruncDate("created_at")).values("day").annotate(c=Count("id"))
-    )
-    trend_map = {row["day"]: row["c"] for row in trend_qs}
-    trend_labels = [d.strftime("%Y-%m-%d") for d in dates]
-    trend_values = [trend_map.get(d, 0) for d in dates]
-
     recent_orders = (
         Order.objects.select_related("customer", "vehicle")
         .exclude(status="completed")
@@ -86,10 +110,6 @@ def dashboard(request: HttpRequest):
     can_manage_inventory = (request.user.is_superuser or request.user.groups.filter(name='manager').exists())
     completed = status_counts.get("completed", 0)
     completed_percent = int((completed * 100) / total_orders) if total_orders else 0
-
-    # Inventory KPI
-    total_stock = InventoryItem.objects.aggregate(total=Sum('quantity'))['total'] or 0
-
     charts = {
         "status": {
             "labels": ["Created", "Assigned", "In Progress", "Completed", "Cancelled"],
@@ -384,7 +404,10 @@ def orders_list(request: HttpRequest):
         qs = qs.filter(status=status)
     if type_ != "all":
         qs = qs.filter(type=type_)
-    return render(request, "tracker/orders_list.html", {"orders": qs[:100]})
+    paginator = Paginator(qs, 20)
+    page = request.GET.get('page')
+    orders = paginator.get_page(page)
+    return render(request, "tracker/orders_list.html", {"orders": orders, "status": status, "type": type_})
 
 
 @login_required
@@ -695,13 +718,18 @@ def api_recent_orders(request: HttpRequest):
 @login_required
 def api_inventory_items(request: HttpRequest):
     from django.db.models import Sum
-    rows = (
-        InventoryItem.objects.values("name")
-        .annotate(total=Sum("quantity"))
-        .order_by("name")
-    )
-    items = [{"name": r["name"], "total_quantity": r["total"] or 0} for r in rows]
-    return JsonResponse({"items": items})
+    cache_key = "api_inv_items_v1"
+    data = cache.get(cache_key)
+    if not data:
+        rows = (
+            InventoryItem.objects.values("name")
+            .annotate(total=Sum("quantity"))
+            .order_by("name")
+        )
+        items = [{"name": r["name"], "total_quantity": r["total"] or 0} for r in rows]
+        data = {"items": items}
+        cache.set(cache_key, data, 120)
+    return JsonResponse(data)
 
 @login_required
 def api_inventory_brands(request: HttpRequest):
@@ -709,17 +737,22 @@ def api_inventory_brands(request: HttpRequest):
     name = request.GET.get("name", "").strip()
     if not name:
         return JsonResponse({"brands": []})
-    rows = (
-        InventoryItem.objects.filter(name=name)
-        .values("brand")
-        .annotate(quantity=Sum("quantity"), min_price=Min("price"))
-        .order_by("brand")
-    )
-    brands = [
-        {"brand": r["brand"] or "", "quantity": r["quantity"] or 0, "price": str(r["min_price"]) if r["min_price"] is not None else ""}
-        for r in rows
-    ]
-    return JsonResponse({"brands": brands})
+    cache_key = f"api_inv_brands_{name}"
+    data = cache.get(cache_key)
+    if not data:
+        rows = (
+            InventoryItem.objects.filter(name=name)
+            .values("brand")
+            .annotate(quantity=Sum("quantity"), min_price=Min("price"))
+            .order_by("brand")
+        )
+        brands = [
+            {"brand": r["brand"] or "", "quantity": r["quantity"] or 0, "price": str(r["min_price"]) if r["min_price"] is not None else ""}
+            for r in rows
+        ]
+        data = {"brands": brands}
+        cache.set(cache_key, data, 120)
+    return JsonResponse(data)
 
 @login_required
 def api_inventory_stock(request: HttpRequest):
@@ -728,11 +761,16 @@ def api_inventory_stock(request: HttpRequest):
     brand = request.GET.get("brand", "").strip()
     if not name:
         return JsonResponse({"available": 0})
-    qs = InventoryItem.objects.filter(name=name)
-    if brand:
-        qs = qs.filter(brand=brand)
-    total = qs.aggregate(total=Sum("quantity")).get("total") or 0
-    return JsonResponse({"available": total})
+    cache_key = f"api_inv_stock_{name}_{brand or 'any'}"
+    data = cache.get(cache_key)
+    if data is None:
+        qs = InventoryItem.objects.filter(name=name)
+        if brand:
+            qs = qs.filter(brand=brand)
+        total = qs.aggregate(total=Sum("quantity")).get("total") or 0
+        data = {"available": total}
+        cache.set(cache_key, data, 60)
+    return JsonResponse(data)
 
 # Permissions
 is_manager = user_passes_test(lambda u: u.is_authenticated and (u.is_superuser or u.groups.filter(name='manager').exists()))
