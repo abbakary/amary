@@ -55,6 +55,19 @@ def send_sms(phone: str, message: str) -> tuple[bool, str]:
     return False, "No SMS provider configured. Set ZAPIER_SMS_WEBHOOK_URL or Twilio env vars."
 
 
+from django.core.cache import cache
+
+def clear_inventory_cache(name: str | None = None, brand: str | None = None) -> None:
+    try:
+        cache.delete('api_inv_items_v1')
+        cache.delete('dashboard_metrics_v1')
+        if name:
+            cache.delete(f'api_inv_brands_{name}')
+            cache.delete(f"api_inv_stock_{name}_{brand or 'any'}")
+    except Exception:
+        pass
+
+
 def adjust_inventory(name: str, brand: str, qty_delta: int) -> tuple[bool, str, int | None]:
     """Adjust inventory by name+brand with qty_delta (negative to deduct, positive to restock).
     Returns (ok, status, remaining_qty). status in {ok, not_found, invalid}.
@@ -73,6 +86,7 @@ def adjust_inventory(name: str, brand: str, qty_delta: int) -> tuple[bool, str, 
             new_qty = 0
         item.quantity = new_qty
         item.save()
+        clear_inventory_cache(name, brand)
         return True, 'ok', new_qty
     except Exception as e:
         return False, str(e), None
