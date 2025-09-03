@@ -294,7 +294,11 @@ class OrderForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
+        # Default estimated duration for service orders
+        if not self.fields["estimated_duration"].initial:
+            self.fields["estimated_duration"].initial = 50
+
         # Dynamic item and brand choices from inventory
         try:
             names = list(InventoryItem.objects.values_list('name', flat=True).order_by('name').distinct())
