@@ -78,7 +78,12 @@ def adjust_inventory(name: str, brand: str, qty_delta: int) -> tuple[bool, str, 
         brand = (brand or '').strip()
         if not name:
             return False, 'invalid', None
-        item = InventoryItem.objects.filter(name=name, brand=brand).first()
+        # Support alias 'Unbranded' which maps to empty/null brand rows
+        if brand.lower() == 'unbranded':
+            from django.db.models import Q
+            item = InventoryItem.objects.filter(name=name).filter(Q(brand__isnull=True) | Q(brand="")).first()
+        else:
+            item = InventoryItem.objects.filter(name=name, brand=brand).first()
         if not item:
             return False, 'not_found', None
         new_qty = item.quantity + int(qty_delta)
