@@ -48,6 +48,10 @@
   .quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
   .action-btn { display: flex; align-items: center; gap: .5rem; padding: .9rem 1rem; background: var(--white); border: 1px solid var(--chart-border); border-radius: 10px; text-decoration: none; color: var(--bs-card-color); transition: transform .2s ease, border-color .2s ease; }
   .action-btn:hover { transform: translateY(-2px); border-color: var(--theme-deafult); color: var(--theme-deafult); }
+
+  /* Greeting hand */
+  .greet-hand { display: inline-block; margin-left: 4px; transform-origin: 70% 70%; animation: wave 2s ease-in-out infinite; }
+  @keyframes wave { 0% { transform: rotate(0deg);} 10% { transform: rotate(14deg);} 20% { transform: rotate(-8deg);} 30% { transform: rotate(14deg);} 40% { transform: rotate(-4deg);} 50% { transform: rotate(10deg);} 60% { transform: rotate(0deg);} 100% { transform: rotate(0deg);} }
 </style>
 {% endblock %}
 
