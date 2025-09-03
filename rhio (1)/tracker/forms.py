@@ -457,3 +457,27 @@ class AdminUserForm(forms.ModelForm):
             if commit:
                 user.save()
         return user
+
+class SystemSettingsForm(forms.Form):
+    company_name = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Company/Workshop name'})
+    )
+    default_priority = forms.ChoiceField(
+        choices=[('low','Low'),('medium','Medium'),('high','High'),('urgent','Urgent')],
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    enable_unbranded_alias = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    allow_order_without_vehicle = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    sms_provider = forms.ChoiceField(
+        choices=[('none','None'),('zapier','Zapier Webhook'),('twilio','Twilio')],
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
