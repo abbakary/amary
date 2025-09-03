@@ -1,5 +1,4 @@
 {% extends 'tracker/base.html' %}
-{% extends 'tracker/base.html' %}
 {% load static %}
 {% block title %}New Order{% if customer %} - {{ customer.full_name }}{% endif %}{% endblock %}
 
@@ -179,7 +178,7 @@
             </div>
             <h6>Car Service</h6>
             <small class="text-muted">Maintenance, repairs, diagnostics</small>
-            <input type="radio" name="type" value="service" class="d-none">
+            <input type="radio" name="type" value="service" class="d-none" {% if form.type.value == "service" or not form.type.value %}checked{% endif %}>
           </div>
           <div class="type-card" data-type="sales">
             <div class="mb-2">
@@ -187,7 +186,7 @@
             </div>
             <h6>Tire Sales</h6>
             <small class="text-muted">Tires, parts, accessories</small>
-            <input type="radio" name="type" value="sales" class="d-none">
+            <input type="radio" name="type" value="sales" class="d-none" {% if form.type.value == "sales" %}checked{% endif %}>
           </div>
           <div class="type-card" data-type="consultation">
             <div class="mb-2">
@@ -195,7 +194,7 @@
             </div>
             <h6>Consultation</h6>
             <small class="text-muted">Inquiries, pricing, advice</small>
-            <input type="radio" name="type" value="consultation" class="d-none">
+            <input type="radio" name="type" value="consultation" class="d-none" {% if form.type.value == "consultation" %}checked{% endif %}>
           </div>
         </div>
       </div>
@@ -244,7 +243,16 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label class="form-label">Service Selection</label>
-                    {{ form.service_selection }}
+                    <div class="row g-2">
+                      {% for cb in form.service_selection %}
+                        <div class="col-sm-6">
+                          <div class="form-check">
+                            {{ cb.tag }}
+                            <label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
                     <div class="form-text">Select all services needed</div>
                   </div>
                 </div>
@@ -457,6 +465,14 @@
       }
     }
   });
+
+  // Ensure a default order type is selected
+  const currentType = "{{ form.type.value|default:'service' }}";
+  const anyChecked = Array.from(typeCards).some(c => c.querySelector('input[type="radio"]')?.checked);
+  if (!anyChecked) {
+    const defaultCard = document.querySelector(`.type-card[data-type="${currentType}"]`);
+    if (defaultCard) defaultCard.click();
+  }
 
   // Vehicle preview
   const vehicleSelect = document.querySelector('[name="vehicle"]');
