@@ -1239,30 +1239,38 @@ def reports_advanced(request: HttpRequest):
     else:
         stats['service_percentage'] = stats['sales_percentage'] = stats['consultation_percentage'] = 0
 
-    # Generate sample chart data
-    import random
+    # Real trend data per selected period
+    qs = Order.objects.filter(created_at__date__range=[start_date, end_date])
+    if period == 'daily':
+        from django.db.models.functions import ExtractHour
+        trend_map = {int(r['h'] or 0): r['c'] for r in qs.annotate(h=ExtractHour('created_at')).values('h').annotate(c=Count('id'))}
+        trend_values = [trend_map.get(h, 0) for h in range(24)]
+    elif period == 'weekly':
+        by_date = {r['day']: r['c'] for r in qs.annotate(day=TruncDate('created_at')).values('day').annotate(c=Count('id'))}
+        trend_values = [(by_date.get(start_date + timedelta(days=i), 0)) for i in range(7)]
+    elif period == 'yearly':
+        from django.db.models.functions import ExtractMonth
+        by_month = {int(r['m']): r['c'] for r in qs.annotate(m=ExtractMonth('created_at')).values('m').annotate(c=Count('id'))}
+        trend_values = [by_month.get(i, 0) for i in range(1, 13)]
+    else:  # monthly
+        by_date = {r['day']: r['c'] for r in qs.annotate(day=TruncDate('created_at')).values('day').annotate(c=Count('id'))}
+        trend_values = [(by_date.get(start_date + timedelta(days=i), 0)) for i in range(30)]
+
     chart_data = {
-        'trend': {
-            'labels': labels,
-            'values': [random.randint(5, 25) for _ in labels]
-        },
+        'trend': { 'labels': labels, 'values': trend_values },
         'status': {
             'labels': ['Created', 'Assigned', 'In Progress', 'Completed', 'Cancelled'],
             'values': [
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='created').count(),
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='assigned').count(),
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='in_progress').count(),
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='completed').count(),
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='cancelled').count(),
+                qs.filter(status='created').count(),
+                qs.filter(status='assigned').count(),
+                qs.filter(status='in_progress').count(),
+                qs.filter(status='completed').count(),
+                qs.filter(status='cancelled').count(),
             ]
         },
         'orders': {
             'labels': ['Service', 'Sales', 'Consultation'],
             'values': [stats['service_orders'], stats['sales_orders'], stats['consultation_orders']]
-        },
-        'growth': {
-            'labels': labels,
-            'values': [random.randint(2, 10) for _ in labels]
         },
         'types': {
             'labels': ['Personal', 'Company', 'Government', 'NGO', 'Bodaboda'],
@@ -1273,18 +1281,6 @@ def reports_advanced(request: HttpRequest):
                 Customer.objects.filter(registration_date__date__range=[start_date, end_date], customer_type='ngo').count(),
                 Customer.objects.filter(registration_date__date__range=[start_date, end_date], customer_type='bodaboda').count(),
             ]
-        },
-        'inquiries': {
-            'labels': labels,
-            'values': [random.randint(1, 8) for _ in labels]
-        },
-        'response': {
-            'labels': labels,
-            'values': [random.uniform(0.5, 4.0) for _ in labels]
-        },
-        'revenue': {
-            'labels': labels,
-            'values': [random.randint(500, 2000) for _ in labels]
         }
     }
 
