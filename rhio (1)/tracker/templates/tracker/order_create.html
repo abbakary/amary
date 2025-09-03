@@ -435,34 +435,33 @@
   const typeCards = document.querySelectorAll('.type-card');
   const orderSections = document.querySelectorAll('.order-section');
   
+  function showSection(type){
+    orderSections.forEach(s => {
+      const match = s.getAttribute('data-section') === type;
+      s.style.display = match ? '' : 'none';
+      s.classList.toggle('active', match);
+      s.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled = !match; });
+    });
+  }
   typeCards.forEach(card => {
     const radio = card.querySelector('input[type="radio"]');
     card.addEventListener('click', () => {
       // Clear previous selections
       typeCards.forEach(c => c.classList.remove('selected'));
-      orderSections.forEach(s => s.style.display = 'none');
-      
+
       // Select current card
       card.classList.add('selected');
       if (radio) radio.checked = true;
-      
+
       // Show corresponding section
       const type = card.dataset.type;
-      const section = document.querySelector(`[data-section="${type}"]`);
-      if (section) {
-        section.style.display = '';
-        section.classList.add('active');
-      }
+      showSection(type);
     });
     
     // Initialize if already selected
     if (radio?.checked) {
       card.classList.add('selected');
-      const section = document.querySelector(`[data-section="${card.dataset.type}"]`);
-      if (section) {
-        section.style.display = '';
-        section.classList.add('active');
-      }
+      showSection(card.dataset.type);
     }
   });
 
@@ -472,6 +471,7 @@
   if (!anyChecked) {
     const defaultCard = document.querySelector(`.type-card[data-type="${currentType}"]`);
     if (defaultCard) defaultCard.click();
+    else showSection(currentType);
   }
 
   // Vehicle preview
