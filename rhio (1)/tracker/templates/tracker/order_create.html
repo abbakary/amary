@@ -554,17 +554,21 @@
     try {
       const data = await fetchJSON(`{% url 'tracker:api_inventory_brands' %}?name=${encodeURIComponent(itemName)}`);
       const brands = data.brands || [];
-      
-      brandSelect.innerHTML = '<option value="">Select brand</option>' + 
-        brands.map(b => `<option value="${b.brand}">${b.brand} (${b.quantity} available)</option>`).join('');
-      
+
+      brandSelect.innerHTML = '<option value="">Select brand</option>' +
+        brands.map(b => {
+          const brandName = (b.brand && b.brand.trim()) ? b.brand : 'Unbranded';
+          const qty = typeof b.quantity === 'number' ? b.quantity : 0;
+          return `<option value="${brandName}" data-qty="${qty}">${brandName} (${qty} available)</option>`;
+        }).join('');
+
       if ($ && $.fn.select2) {
         $(brandSelect).trigger('change.select2');
       }
-      
+
       if (brandStock) {
-        brandStock.textContent = brands.length > 0 ? 
-          `${brands.length} brands available` : 'No brands in stock';
+        brandStock.textContent = brands.length > 0 ?
+          `${brands.length} brand${brands.length===1?'':'s'} available` : 'No brands in stock';
       }
     } catch (e) {
       console.warn('Could not load brands:', e);
