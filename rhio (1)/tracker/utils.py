@@ -63,7 +63,12 @@ def clear_inventory_cache(name: str | None = None, brand: str | None = None) -> 
         cache.delete('dashboard_metrics_v1')
         if name:
             cache.delete(f'api_inv_brands_{name}')
-            cache.delete(f"api_inv_stock_{name}_{brand or 'any'}")
+            # Invalidate stock caches for specific brand, unbranded alias, and any-brand aggregate
+            keys = {f"api_inv_stock_{name}_{brand or 'any'}", f"api_inv_stock_{name}_any"}
+            if (brand or '').lower() == 'unbranded' or not (brand or '').strip():
+                keys.add(f"api_inv_stock_{name}_any")
+            for k in keys:
+                cache.delete(k)
     except Exception:
         pass
 
