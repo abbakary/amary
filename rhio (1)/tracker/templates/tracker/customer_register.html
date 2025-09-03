@@ -756,7 +756,13 @@
   }
 
   crItem?.addEventListener('change', () => { loadBrandsCR(); checkStockCR(); });
+  if (window.jQuery && jQuery.fn.select2 && crItem) {
+    jQuery(crItem).on('select2:select', () => { loadBrandsCR(); checkStockCR(); });
+  }
   crBrand?.addEventListener('change', checkStockCR);
+  if (crBrand) {
+    crBrand.addEventListener('focus', () => { if (!crBrand.options || crBrand.options.length <= 1) loadBrandsCR(); });
+  }
   crQty?.addEventListener('input', debounce(checkStockCR, 300));
 
   // Initialize if prefilled
