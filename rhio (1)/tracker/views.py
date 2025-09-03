@@ -501,7 +501,11 @@ def order_start(request: HttpRequest):
             name = (o.item_name or '').strip()
             brand = (o.brand or '').strip()
             qty = int(o.quantity or 0)
-            available = InventoryItem.objects.filter(name=name, brand=brand).aggregate(total=Sum('quantity')).get('total') or 0
+            from django.db.models import Q, Sum
+            if (brand or '').lower() == 'unbranded':
+                available = InventoryItem.objects.filter(name=name).filter(Q(brand__isnull=True) | Q(brand="")).aggregate(total=Sum('quantity')).get('total') or 0
+            else:
+                available = InventoryItem.objects.filter(name=name, brand=brand).aggregate(total=Sum('quantity')).get('total') or 0
             if not name or not brand or qty <= 0:
                 messages.error(request, 'Item, brand and valid quantity are required')
                 return render(request, "tracker/order_create.html", {"customer": c, "form": form})
