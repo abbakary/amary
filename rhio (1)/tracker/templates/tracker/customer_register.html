@@ -710,16 +710,35 @@
   async function loadBrandsCR() {
     if (!crItem || !crBrand) return;
     const name = crItem.value;
+    const buildOptions = (brands)=>{
+      const opts = ['<option value="">Select brand</option>'];
+      brands.forEach(b=>{
+        const brandName = (b.brand && b.brand.trim()) ? b.brand : 'Unbranded';
+        const qty = typeof b.quantity === 'number' ? b.quantity : 0;
+        opts.push(`<option value="${brandName}">${brandName} (${qty} available)</option>`);
+      });
+      return opts.join('');
+    };
     if (!name) {
-      crBrand.innerHTML = '<option value="">Select item first</option>';
+      const html = '<option value="">Select item first</option>';
+      if (window.jQuery && jQuery.fn.select2) {
+        const $b = jQuery(crBrand);
+        $b.html(html).val('').trigger('change');
+      } else {
+        crBrand.innerHTML = html;
+      }
       if (crBrandHint) crBrandHint.textContent = 'Choose brand after selecting item';
-      if (window.jQuery && jQuery.fn.select2) jQuery(crBrand).trigger('change.select2');
       return;
     }
     const data = await fetchJSON('{% url 'tracker:api_inventory_brands' %}?name=' + encodeURIComponent(name));
     const brands = data.brands || [];
-    crBrand.innerHTML = '<option value="">Select brand</option>' + brands.map(b => `<option value="${b.brand}">${b.brand} (${b.quantity} available)</option>`).join('');
-    if (window.jQuery && jQuery.fn.select2) jQuery(crBrand).trigger('change.select2');
+    const html = buildOptions(brands);
+    if (window.jQuery && jQuery.fn.select2) {
+      const $b = jQuery(crBrand);
+      $b.html(html).val('').trigger('change');
+    } else {
+      crBrand.innerHTML = html;
+    }
     if (crBrandHint) crBrandHint.textContent = brands.length ? `${brands.length} brands available` : 'No brands in stock';
   }
 
