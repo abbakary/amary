@@ -160,7 +160,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="col-lg-3 col-md-6">
       <div class="card stats-card customers">
         <div class="card-body text-center">
@@ -175,7 +175,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="col-lg-3 col-md-6">
       <div class="card stats-card active">
         <div class="card-body text-center">
@@ -190,18 +190,18 @@
         </div>
       </div>
     </div>
-    
+
     <div class="col-lg-3 col-md-6">
       <div class="card stats-card completed">
         <div class="card-body text-center">
           <div class="d-flex justify-content-between align-items-start mb-2">
             <div>
-              <h6 class="mb-0 opacity-75">Completed Today</h6>
-              <h2 class="mb-0">{{ completed_today_count|default:0 }}</h2>
+              <h6 class="mb-0 opacity-75">Total Stock</h6>
+              <h2 class="mb-0">{{ total_stock|default:0 }}</h2>
             </div>
-            <i data-feather="check-circle" class="feather-24 opacity-75"></i>
+            <i data-feather="package" class="feather-24 opacity-75"></i>
           </div>
-          <small class="opacity-75">Orders finished today</small>
+          <small class="opacity-75">Units in inventory</small>
         </div>
       </div>
     </div>
