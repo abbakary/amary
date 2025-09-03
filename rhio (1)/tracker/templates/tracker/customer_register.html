@@ -459,17 +459,25 @@
                     <label class="form-label fw-semibold">Item Name</label>
                     {{ order_form.item_name }}
                   </div>
-                  <div class="mb-3">
+                  <div class="mb-1">
                     <label class="form-label fw-semibold">Brand</label>
                     {{ order_form.brand }}
+                    <div id="crBrandHint" class="form-text">Choose brand after selecting item</div>
                   </div>
                   <div class="mb-3">
                     <label class="form-label fw-semibold">Quantity</label>
                     {{ order_form.quantity }}
                   </div>
-                  <div class="mb-0">
-                    <label class="form-label fw-semibold">Tire Type</label>
+                  <div class="mb-3">
+                    <label class="form-label fw-semibold">Tire Condition</label>
                     {{ order_form.tire_type }}
+                  </div>
+                  <div id="crStockInfo" class="alert alert-light border d-flex justify-content-between align-items-center" style="display:none;">
+                    <div>
+                      <small class="fw-semibold">Stock Status:</small>
+                      <span id="crStockText">Checking availability...</span>
+                    </div>
+                    <div id="crStockBadge"></div>
                   </div>
                 </div>
               </div>
@@ -630,16 +638,80 @@
   const serviceFields = document.getElementById('serviceFields');
   const salesFields = document.getElementById('salesFields');
   const inquiryFields = document.getElementById('inquiryFields');
-  
+
   function updateOrderTypeFields() {
     const t = orderTypeSelect?.value;
     if (serviceFields) serviceFields.style.display = (t === 'service') ? '' : 'none';
     if (salesFields) salesFields.style.display = (t === 'sales') ? '' : 'none';
     if (inquiryFields) inquiryFields.style.display = (t === 'consultation') ? '' : 'none';
+    if (t === 'sales') {
+      loadBrandsCR();
+      checkStockCR();
+    }
   }
-  
+
   orderTypeSelect?.addEventListener('change', updateOrderTypeFields);
   updateOrderTypeFields();
+
+  // Sales: dynamic brands + stock check
+  const crItem = document.querySelector('[name="item_name"]');
+  const crBrand = document.querySelector('[name="brand"]');
+  const crQty = document.querySelector('[name="quantity"]');
+  const crStockInfo = document.getElementById('crStockInfo');
+  const crStockText = document.getElementById('crStockText');
+  const crStockBadge = document.getElementById('crStockBadge');
+  const crBrandHint = document.getElementById('crBrandHint');
+
+  async function fetchJSON(url) {
+    try {
+      const r = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      return await r.json();
+    } catch (e) { console.warn('Fetch error', e); return {}; }
+  }
+
+  async function loadBrandsCR() {
+    if (!crItem || !crBrand) return;
+    const name = crItem.value;
+    if (!name) {
+      crBrand.innerHTML = '<option value="">Select item first</option>';
+      if (crBrandHint) crBrandHint.textContent = 'Choose brand after selecting item';
+      if (window.jQuery && jQuery.fn.select2) jQuery(crBrand).trigger('change.select2');
+      return;
+    }
+    const data = await fetchJSON('{% url 'tracker:api_inventory_brands' %}?name=' + encodeURIComponent(name));
+    const brands = data.brands || [];
+    crBrand.innerHTML = '<option value="">Select brand</option>' + brands.map(b => `<option value="${b.brand}">${b.brand} (${b.quantity} available)</option>`).join('');
+    if (window.jQuery && jQuery.fn.select2) jQuery(crBrand).trigger('change.select2');
+    if (crBrandHint) crBrandHint.textContent = brands.length ? `${brands.length} brands available` : 'No brands in stock';
+  }
+
+  async function checkStockCR() {
+    if (!crItem || !crBrand || !crStockInfo) return;
+    const name = crItem.value;
+    const brand = crBrand.value;
+    const qty = parseInt(crQty?.value || 1);
+    if (!name || !brand) { crStockInfo.style.display = 'none'; return; }
+    const params = new URLSearchParams({ name, brand });
+    const data = await fetchJSON('{% url 'tracker:api_inventory_stock' %}?' + params.toString());
+    const available = data.available || 0;
+    crStockText.textContent = `${available} units available`;
+    let klass = 'badge ';
+    let text = '';
+    if (available === 0) { klass += 'bg-danger'; text = 'Out of Stock'; }
+    else if (available < qty) { klass += 'bg-warning text-dark'; text = 'Insufficient Stock'; }
+    else if (available < 5) { klass += 'bg-warning text-dark'; text = 'Low Stock'; }
+    else { klass += 'bg-success'; text = 'In Stock'; }
+    crStockBadge.innerHTML = `<span class="${klass}">${text}</span>`;
+    crStockInfo.style.display = '';
+  }
+
+  crItem?.addEventListener('change', () => { loadBrandsCR(); checkStockCR(); });
+  crBrand?.addEventListener('change', checkStockCR);
+  crQty?.addEventListener('input', debounce(checkStockCR, 300));
+
+  // Initialize if prefilled
+  loadBrandsCR();
+  checkStockCR();
   
   // Utility function
   function debounce(func, wait) {
