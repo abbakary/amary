@@ -1,0 +1,1034 @@
+{% extends 'tracker/base.html' %}
+{% load static %}
+{% block title %}Customer Registration{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/vendors/select2.css' %}">
+<link rel="stylesheet" href="{% static 'css/vendors/flatpickr/flatpickr.min.css' %}">
+<style>
+  .step-indicator {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    position: relative;
+  }
+  .step-indicator::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #e9ecef;
+    z-index: 1;
+  }
+  .step-indicator .step {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    position: relative;
+    z-index: 2;
+    transition: all 0.3s ease;
+  }
+  .step-indicator .step.active {
+    background: var(--bs-primary);
+    color: white;
+    border-color: var(--bs-primary);
+  }
+  .step-indicator .step.completed {
+    background: var(--bs-success);
+    border-color: var(--bs-success);
+    color: white;
+  }
+  .step-label {
+    text-align: center;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #6c757d;
+  }
+  .step-label.active {
+    color: var(--bs-primary);
+    font-weight: 600;
+  }
+  .form-section {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .section-title {
+    color: var(--bs-primary);
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .intent-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+  }
+  .intent-card:hover {
+    border-color: var(--bs-primary);
+    box-shadow: 0 4px 8px rgba(0,123,255,0.15);
+  }
+  .intent-card.selected {
+    border-color: var(--bs-primary);
+    background: rgba(0,123,255,0.05);
+  }
+  .service-type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+  }
+  .service-card {
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  .service-card:hover {
+    border-color: var(--bs-primary);
+    transform: translateY(-2px);
+  }
+  .service-card.selected {
+    border-color: var(--bs-primary);
+    background: rgba(0,123,255,0.05);
+  }
+  .customer-summary {
+    background: #e3f2fd;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Page Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="mb-1">Customer Registration</h3>
+      <p class="text-muted mb-0">Complete multi-step customer registration and service setup</p>
+    </div>
+    <div class="d-flex gap-2">
+      <form method="post" action="{% if is_sales_redirect %}{% url 'tracker:customer_register_sales_redirect' %}{% else %}{% url 'tracker:customer_register' %}{% endif %}" class="needs-validation" novalidate>
+        <i data-feather="users" class="me-1"></i>All Customers
+      </form>
+    </div>
+  </div>
+
+  <!-- Step Indicator -->
+  <div class="step-indicator">
+    <div class="step-item">
+      <div class="step {% if step == 1 or step == '1' %}active{% elif step > 1 %}completed{% endif %}">1</div>
+      <div class="step-label {% if step == 1 or step == '1' %}active{% endif %}">Basic Information</div>
+    </div>
+    <div class="step-item">
+      <div class="step {% if step == 2 or step == '2' %}active{% elif step > 2 %}completed{% endif %}">2</div>
+      <div class="step-label {% if step == 2 or step == '2' %}active{% endif %}">Service Intent</div>
+    </div>
+    <div class="step-item">
+      <div class="step {% if step == 3 or step == '3' %}active{% elif step > 3 %}completed{% endif %}">3</div>
+      <div class="step-label {% if step == 3 or step == '3' %}active{% endif %}">Service Type</div>
+    </div>
+    <div class="step-item">
+      <div class="step {% if step == 4 or step == '4' %}active{% endif %}">4</div>
+      <div class="step-label {% if step == 4 or step == '4' %}active{% endif %}">Details & Review</div>
+    </div>
+  </div>
+
+  <!-- Form Container -->
+  <div class="card shadow-sm">
+    <form method="post" action="{% if is_sales_redirect %}{% url 'tracker:customer_register_sales_redirect' %}{% else %}{% url 'tracker:customer_register' %}{% endif %}" class="card-body">
+      {% csrf_token %}
+      <input type="hidden" name="step" value="{{ step }}">
+
+      <!-- Step 1: Basic Customer Information -->
+      {% if step == 1 or step == '1' %}
+        <div class="form-section">
+          <h5 class="section-title">
+            <i data-feather="user" class="feather-16"></i>
+            Customer Basic Information
+          </h5>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
+              {{ form.full_name }}
+              {% for error in form.full_name.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+              {% endfor %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
+              {{ form.phone }}
+              {% for error in form.phone.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+              {% endfor %}
+              <div class="form-text">Format: +250XXXXXXXXX</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Email Address</label>
+              {{ form.email }}
+              {% for error in form.email.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+              {% endfor %}
+              <div class="form-text">Optional - for digital communications</div>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Address</label>
+              {{ form.address }}
+              <div class="form-text">Customer's physical location</div>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Additional Notes</label>
+              {{ form.notes }}
+              <div class="form-text">Any special information about this customer</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+          <div></div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" name="action" value="save_customer" type="submit">
+              <i data-feather="save" class="me-1"></i>Save Customer Only
+            </button>
+            <button class="btn btn-primary" type="submit">
+              Next Step <i data-feather="arrow-right" class="ms-1"></i>
+            </button>
+          </div>
+        </div>
+
+      <!-- Step 2: Service Intent Selection -->
+      {% elif step == 2 or step == '2' %}
+        <div class="form-section">
+          <h5 class="section-title">
+            <i data-feather="help-circle" class="feather-16"></i>
+            What brings you here today?
+          </h5>
+          <div class="row g-3">
+            {% for value, label in form.fields.intent.choices %}
+              <div class="col-md-4">
+                <div class="intent-card card h-100 p-0" data-intent="{{ value }}">
+                  <div class="card-body d-flex align-items-center">
+                    <input class="form-check-input me-3" type="radio" name="intent" id="intent_{{ forloop.counter }}" 
+                           value="{{ value }}" {% if form.initial.intent == value or form.data.intent == value %}checked{% endif %}>
+                    <div>
+                      <h6 class="mb-1 text-capitalize">{{ label }}</h6>
+                      <small class="text-muted">
+                        {% if value == 'service' %}I need car maintenance or repair services
+                        {% elif value == 'sales' %}I want to purchase tires or parts
+                        {% else %}I have questions or need information{% endif %}
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+          <a class="btn btn-outline-secondary" href="?step=1">
+            <i data-feather="arrow-left" class="me-1"></i>Back
+          </a>
+          <button class="btn btn-primary" type="submit">
+            Next Step <i data-feather="arrow-right" class="ms-1"></i>
+          </button>
+        </div>
+
+      <!-- Step 3: Service Type Selection -->
+      {% elif step == 3 or step == '3' %}
+        {% if intent == 'service' %}
+          <div class="form-section">
+            <h5 class="section-title">
+              <i data-feather="tool" class="feather-16"></i>
+              Select Services Needed
+            </h5>
+            <div class="row g-2">
+              <div class="col-12">
+                {{ form.service_type }}
+              </div>
+            </div>
+            {% for error in form.service_type.errors %}
+              <div class="text-danger small mt-2">{{ error }}</div>
+            {% endfor %}
+          </div>
+        
+        {% elif intent == 'sales' %}
+          <div class="form-section">
+            <h5 class="section-title">
+              <i data-feather="shopping-cart" class="feather-16"></i>
+              Select Sales Type
+            </h5>
+            <div class="service-type-grid">
+              {% for value, label in form.sales_type.field.choices %}
+                <div class="service-card" data-sales="{{ value }}">
+                  <input class="form-check-input" type="radio" name="sales_type" 
+                         id="sales_{{ forloop.counter }}" value="{{ value }}" 
+                         {% if form.sales_type.value == value %}checked{% endif %}>
+                  <label class="form-check-label ms-2 fw-semibold" for="sales_{{ forloop.counter }}">
+                    {{ label }}
+                  </label>
+                  <div class="small text-muted mt-1">
+                    {% if value == 'tires' %}All types of tire sales
+                    {% elif value == 'parts' %}Car parts and accessories
+                    {% else %}Other automotive products{% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            {% for error in form.sales_type.errors %}
+              <div class="text-danger small mt-2">{{ error }}</div>
+            {% endfor %}
+          </div>
+        
+        {% else %}
+          <div class="form-section">
+            <h5 class="section-title">
+              <i data-feather="message-circle" class="feather-16"></i>
+              Inquiry Setup
+            </h5>
+            <div class="alert alert-info">
+              <i data-feather="info" class="me-2"></i>
+              Perfect! We'll help you with your inquiry. Proceed to the next step to provide details.
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="d-flex justify-content-between">
+          <a class="btn btn-outline-secondary" href="?step=2">
+            <i data-feather="arrow-left" class="me-1"></i>Back
+          </a>
+          <button class="btn btn-primary" type="submit">
+            Next Step <i data-feather="arrow-right" class="ms-1"></i>
+          </button>
+        </div>
+
+      <!-- Step 4: Details & Review -->
+      {% else %}
+        <!-- Customer Summary -->
+        <div class="customer-summary">
+          <h6 class="mb-2">
+            <i data-feather="user-check" class="me-1"></i>Customer Summary
+          </h6>
+          <div class="row">
+            <div class="col-md-8">
+              <strong>{{ step1.full_name|default:"Customer Name" }}</strong> -
+              {{ step1.phone|default:"Phone Number" }}
+              {% if step1.email %}<br><small>{{ step1.email }}</small>{% endif %}
+            </div>
+            <div class="col-md-4 text-end">
+              <span class="badge bg-primary">{{ intent|default:"service"|title }} Request</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <!-- Customer Details -->
+          <div class="col-lg-6">
+            <div class="form-section">
+              <h5 class="section-title">
+                <i data-feather="users" class="feather-16"></i>
+                Customer Classification
+              </h5>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Customer Type</label>
+                {{ form.customer_type }}
+              </div>
+              
+              <div id="orgFields" style="display: none;">
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Organization Name</label>
+                  {{ form.organization_name }}
+                </div>
+                <div class="mb-0">
+                  <label class="form-label fw-semibold">Tax Number</label>
+                  {{ form.tax_number }}
+                </div>
+              </div>
+              
+              <div id="personalFields" style="display: none;">
+                <div class="mb-0">
+                  <label class="form-label fw-semibold">Personal Type</label>
+                  {{ form.personal_subtype }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vehicle Information -->
+          <div class="col-lg-6">
+            <div class="form-section">
+              <h5 class="section-title">
+                <i data-feather="truck" class="feather-16"></i>
+                Vehicle Information (Optional)
+              </h5>
+              {% for field in vehicle_form %}
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">{{ field.label }}</label>
+                  {{ field }}
+                  {% for error in field.errors %}
+                    <div class="text-danger small mt-1">{{ error }}</div>
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Order Creation Section -->
+        <div class="form-section">
+          <h5 class="section-title">
+            <i data-feather="file-plus" class="feather-16"></i>
+            Create Initial Order
+          </h5>
+          
+          <!-- Order Basics -->
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              {% if intent == 'service' %}
+                <label class="form-label fw-semibold">Request Type</label>
+                <div><span class="badge bg-primary">Service</span></div>
+                <input type="hidden" name="type" value="service">
+              {% elif intent == 'sales' %}
+                <label class="form-label fw-semibold">Request Type</label>
+                <div><span class="badge bg-success">Sales</span></div>
+                <input type="hidden" name="type" value="sales">
+              {% elif intent == 'inquiry' %}
+                <label class="form-label fw-semibold">Request Type</label>
+                <div><span class="badge bg-info text-dark">Consultation</span></div>
+                <input type="hidden" name="type" value="consultation">
+              {% else %}
+                <label class="form-label fw-semibold">Order Type</label>
+                {{ order_form.type }}
+              {% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Priority Level</label>
+              {{ order_form.priority }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Vehicle</label>
+              {{ order_form.vehicle }}
+            </div>
+          </div>
+
+          <!-- Order Details Sections -->
+          <div class="row g-3">
+            {% if intent == 'service' %}
+              <!-- Service Details -->
+              <div class="col-lg-6">
+                <div id="serviceFields" class="card">
+                  <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">
+                      <i data-feather="tool" class="me-1"></i>Service Details
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Services Required</label>
+                      <div class="row g-2">
+                        {% for cb in order_form.service_selection %}
+                          <div class="col-sm-6">
+                            <div class="form-check">
+                              {{ cb.tag }}
+                              <label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
+                            </div>
+                          </div>
+                        {% endfor %}
+                      </div>
+                      <div class="form-text">Select all services needed</div>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Estimated Duration (minutes)</label>
+                      {{ order_form.estimated_duration }}
+                      <div class="form-text">How long will this take?</div>
+                    </div>
+                    <div class="mb-0">
+                      <label class="form-label fw-semibold">Problem Description</label>
+                      {{ order_form.description }}
+                      <div class="form-text">Describe the issue or service needed</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% elif intent == 'sales' %}
+              <!-- Sales Details -->
+              <div class="col-12">
+                <div id="salesFields" class="card">
+                  <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                      <i data-feather="shopping-cart" class="me-1"></i>Sales Details
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Item Name</label>
+                      {{ order_form.item_name }}
+                    </div>
+                    <div class="mb-1">
+                      <label class="form-label fw-semibold">Brand</label>
+                      {{ order_form.brand }}
+                      <div id="crBrandHint" class="form-text">Choose brand after selecting item</div>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Quantity</label>
+                      {{ order_form.quantity }}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Tire Condition</label>
+                      {{ order_form.tire_type }}
+                    </div>
+                    <div id="crStockInfo" class="alert alert-light border d-flex justify-content-between align-items-center" style="display:none;">
+                      <div>
+                        <small class="fw-semibold">Stock Status:</small>
+                        <span id="crStockText">Checking availability...</span>
+                      </div>
+                      <div id="crStockBadge"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% elif intent == 'inquiry' %}
+              <!-- Inquiry Details -->
+              <div class="col-lg-6">
+                <div id="inquiryFields" class="card">
+                  <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                      <i data-feather="message-circle" class="me-1"></i>Inquiry Details
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Inquiry Type</label>
+                      {{ order_form.inquiry_type }}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Questions</label>
+                      {{ order_form.questions }}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Contact Preference</label>
+                      {{ order_form.contact_preference }}
+                    </div>
+                    <div class="mb-0">
+                      <label class="form-label fw-semibold">Follow-up Date</label>
+                      {{ order_form.follow_up_date }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+          <a class="btn btn-outline-secondary" href="?step=3">
+            <i data-feather="arrow-left" class="me-1"></i>Back
+          </a>
+          <button class="btn btn-success btn-lg" type="submit">
+            <i data-feather="check-circle" class="me-1"></i>Complete Registration
+          </button>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/select2/select2.full.min.js' %}"></script>
+<script src="{% static 'js/flat-pickr/flatpickr.js' %}"></script>
+<script>
+(function(){
+  'use strict';
+  
+  // Initialize plugins
+  const $ = window.jQuery;
+  if ($ && $.fn.select2) {
+    $('select').select2({width:'100%'});
+  }
+  if (window.flatpickr) {
+    document.querySelectorAll('input[type="date"]').forEach(el => 
+      flatpickr(el, {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "F j, Y"
+      })
+    );
+  }
+  
+  // Form draft saving
+  const form = document.querySelector('form');
+  const step = parseInt('{{ step|default:1 }}', 10);
+  const key = `customer_reg_draft_step_${step}`;
+  
+  // Load draft
+  try {
+    const draft = JSON.parse(localStorage.getItem(key) || '{}');
+    Object.entries(draft).forEach(([name, val]) => {
+      if (name === 'csrfmiddlewaretoken') return; // never restore CSRF token
+      const el = form.querySelector(`[name="${name}"]`);
+      if (!el) return;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        el.checked = !!val;
+      } else {
+        el.value = val;
+      }
+    });
+  } catch(e) {
+    console.warn('Could not load form draft:', e);
+  }
+  
+  // Save draft on input
+  form?.addEventListener('input', debounce(() => {
+    const data = {};
+    const customerType = customerTypeSelect?.value || '';
+    
+    // Always include customer type
+    if (customerType) {
+      data['customer_type'] = customerType;
+    }
+    
+    // Include all form fields
+    form.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.name && el.name !== 'csrfmiddlewaretoken') {
+        // Handle checkboxes and radio buttons
+        if (el.type === 'checkbox' || el.type === 'radio') {
+          data[el.name] = el.checked;
+        } else {
+          data[el.name] = el.value;
+        }
+      }
+    });
+    
+    // Special handling for organization/personal fields based on customer type
+    if (['government', 'ngo', 'company'].includes(customerType)) {
+      const orgName = document.querySelector('[name="organization_name"]');
+      const taxNumber = document.querySelector('[name="tax_number"]');
+      if (orgName) data['organization_name'] = orgName.value;
+      if (taxNumber) data['tax_number'] = taxNumber.value;
+    } else if (customerType === 'personal') {
+      const personalSubtype = document.querySelector('[name="personal_subtype"]');
+      if (personalSubtype) data['personal_subtype'] = personalSubtype.value;
+    }
+    
+    localStorage.setItem(key, JSON.stringify(data));
+  }, 500));
+  
+  // Intent card selection
+  document.querySelectorAll('.intent-card').forEach(card => {
+    const radio = card.querySelector('input[type="radio"]');
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.intent-card').forEach(c => c.classList.remove('selected'));
+      if (radio) {
+        radio.checked = true;
+        card.classList.add('selected');
+      }
+    });
+    if (radio?.checked) {
+      card.classList.add('selected');
+    }
+  });
+  
+  // Service card selection
+  document.querySelectorAll('.service-card').forEach(card => {
+    const radio = card.querySelector('input[type="radio"]');
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.service-card').forEach(c => c.classList.remove('selected'));
+      if (radio) {
+        radio.checked = true;
+        card.classList.add('selected');
+      }
+    });
+    if (radio?.checked) {
+      card.classList.add('selected');
+    }
+  });
+  
+  // Customer type handling
+  const customerTypeSelect = document.querySelector('[name="customer_type"]');
+  const orgFields = document.getElementById('orgFields');
+  const personalFields = document.getElementById('personalFields');
+  
+  function setDisabled(container, disabled) {
+    if (!container) return;
+    container.querySelectorAll('input,select,textarea').forEach(el => {
+      el.disabled = disabled;
+      if (disabled) {
+        if (el.type === 'checkbox' || el.type === 'radio') {
+          el.checked = false;
+        } else {
+          el.value = '';
+        }
+      }
+    });
+  }
+  
+  function updateCustomerTypeFields() {
+    if (!customerTypeSelect) return;
+    
+    const type = customerTypeSelect.value || '';
+    const isOrg = ['government', 'ngo', 'company'].includes(type);
+    const isPersonal = type === 'personal';
+    
+    // Handle organization fields
+    if (orgFields) {
+      const orgName = orgFields.querySelector('[name="organization_name"]');
+      const taxNumber = orgFields.querySelector('[name="tax_number"]');
+      
+      if (isOrg) {
+        orgFields.style.display = 'block';
+        setDisabled(orgFields, false);
+        if (orgName) orgName.required = true;
+        if (taxNumber) taxNumber.required = true;
+      } else {
+        orgFields.style.display = 'none';
+        setDisabled(orgFields, true);
+        if (orgName) orgName.required = false;
+        if (taxNumber) taxNumber.required = false;
+      }
+    }
+    
+    // Handle personal fields
+    if (personalFields) {
+      const personalSubtype = personalFields.querySelector('[name="personal_subtype"]');
+      
+      if (isPersonal) {
+        personalFields.style.display = 'block';
+        setDisabled(personalFields, false);
+        if (personalSubtype) personalSubtype.required = true;
+      } else {
+        personalFields.style.display = 'none';
+        setDisabled(personalFields, true);
+        if (personalSubtype) personalSubtype.required = false;
+      }
+    }
+    
+    // Ensure at least one field is filled based on type
+    validateCustomerTypeFields();
+  }
+  
+  function validateCustomerTypeFields() {
+    if (!customerTypeSelect) return true;
+    
+    const type = customerTypeSelect.value || '';
+    const isOrg = ['government', 'ngo', 'company'].includes(type);
+    const isPersonal = type === 'personal';
+    
+    let isValid = true;
+    
+    // Reset validation states
+    document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    
+    // Validate organization fields if org type is selected
+    if (isOrg && orgFields) {
+      const orgName = orgFields.querySelector('[name="organization_name"]');
+      const taxNumber = orgFields.querySelector('[name="tax_number"]');
+      
+      if (orgName && !orgName.value.trim()) {
+        orgName.classList.add('is-invalid');
+        isValid = false;
+      }
+      
+      if (taxNumber && !taxNumber.value.trim()) {
+        taxNumber.classList.add('is-invalid');
+        isValid = false;
+      }
+    }
+    
+    // Validate personal fields if personal type is selected
+    if (isPersonal && personalFields) {
+      const personalSubtype = personalFields.querySelector('[name="personal_subtype"]');
+      
+      if (personalSubtype && !personalSubtype.value) {
+        personalSubtype.classList.add('is-invalid');
+        isValid = false;
+      }
+    }
+    
+    return isValid;
+  }
+  
+  // Initialize event listeners
+  if (customerTypeSelect) {
+    customerTypeSelect.addEventListener('change', updateCustomerTypeFields);
+    
+    // Also validate on form submission
+    const form = document.querySelector('form');
+    
+    // Initialize form submission handler
+    if (form) {
+      form.addEventListener('submit', function(e) {
+      // Prevent default form submission
+      e.preventDefault();
+      
+      // Get the intent from URL or form data
+      const urlParams = new URLSearchParams(window.location.search);
+      const defaultIntent = "{{ intent|default:''|escapejs }}";
+      const intent = urlParams.get('intent') || defaultIntent;
+      const isSalesRedirect = "{{ is_sales_redirect|default:'false'|escapejs }}" === 'True';
+      
+      // Validate customer data
+      if (!validateCustomerTypeFields()) {
+        const firstError = form.querySelector('.is-invalid');
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return false;
+      }
+      
+      // Handle sales redirect
+      if (intent === 'sales' || isSalesRedirect) {
+        form.action = '{% url "tracker:customer_register_sales_redirect" %}';
+        form.submit();
+        return false;
+      }
+      
+      // For non-sales submissions, allow default form submission
+      // Ensure customer type is properly set
+        const customerType = customerTypeSelect?.value;
+        if (!customerType) {
+          alert('Please select a customer type');
+          customerTypeSelect.focus();
+          return false;
+        }
+        
+        // For organization types, ensure required fields are present
+        if (['government', 'ngo', 'company'].includes(customerType)) {
+          const orgName = form.querySelector('[name="organization_name"]');
+          if (!orgName?.value.trim()) {
+            alert('Organization name is required');
+            orgName?.focus();
+            return false;
+          }
+        }
+        
+        // For personal type, ensure subtype is selected
+        if (customerType === 'personal') {
+          const personalSubtype = form.querySelector('[name="personal_subtype"]');
+          if (!personalSubtype?.value) {
+            alert('Please select a customer category');
+            personalSubtype?.focus();
+            return false;
+          }
+        }
+        
+        // Serialize form data for the redirect
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        
+        // Add all form data to URL params
+        for (const [key, value] of formData.entries()) {
+          if (value) {
+            params.append(key, value);
+          }
+        }
+        
+        // Add customer type if not in form data
+        if (customerType && !params.has('customer_type')) {
+          params.append('customer_type', customerType);
+        }
+        
+        // Set intent to sales and redirect to order_start
+        params.set('intent', 'sales');
+        window.location.href = `{% url 'tracker:order_start' %}?${params.toString()}`;
+        return false;
+      }
+      
+      // For non-sales intents, proceed with normal form submission
+      if (!validateCustomerTypeFields()) {
+        const firstError = form.querySelector('.is-invalid');
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return false;
+      }
+      
+      // Existing validation for non-sales intents
+      const customerType = customerTypeSelect?.value;
+      if (!customerType) {
+        alert('Please select a customer type');
+        customerTypeSelect.focus();
+        return false;
+      }
+      
+      if (['government', 'ngo', 'company'].includes(customerType)) {
+        const orgName = form.querySelector('[name="organization_name"]');
+        if (!orgName?.value.trim()) {
+          alert('Organization name is required');
+          orgName?.focus();
+          return false;
+        }
+      }
+      
+      if (customerType === 'personal') {
+        const personalSubtype = form.querySelector('[name="personal_subtype"]');
+        if (!personalSubtype?.value) {
+          alert('Please select a customer category');
+          personalSubtype?.focus();
+          return false;
+        }
+      }
+      
+      if (!form.querySelector('[name="customer_type"]')) {
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'customer_type';
+        hiddenInput.value = customerType;
+        form.appendChild(hiddenInput);
+      }
+      
+      // Clear draft and submit the form for non-sales intents
+      localStorage.removeItem(key);
+      form.submit();
+      return true;
+    });
+  }
+  
+  // Required flags based on server intent (no toggling)
+  (function enforceRequiredByIntent(){
+    const t = '{% if intent == "service" %}service{% elif intent == "sales" %}sales{% elif intent == "inquiry" %}consultation{% else %}{% endif %}';
+    const setReq = (sel, req) => { const el = document.querySelector(sel); if (el) el.required = !!req; };
+    setReq('[name="description"]', t==='service');
+    setReq('[name="estimated_duration"]', t==='service');
+    setReq('[name="item_name"]', t==='sales');
+    setReq('[name="brand"]', t==='sales');
+    setReq('[name="quantity"]', t==='sales');
+    setReq('[name="inquiry_type"]', t==='consultation');
+    setReq('[name="questions"]', t==='consultation');
+    if (t==='sales') { loadBrandsCR(); checkStockCR(); }
+  })();
+
+  // Sales: dynamic brands + stock check
+  const crItem = document.querySelector('[name="item_name"]');
+  const crBrand = document.querySelector('[name="brand"]');
+  const crQty = document.querySelector('[name="quantity"]');
+  const crStockInfo = document.getElementById('crStockInfo');
+  const crStockText = document.getElementById('crStockText');
+  const crStockBadge = document.getElementById('crStockBadge');
+  const crBrandHint = document.getElementById('crBrandHint');
+
+  async function fetchJSON(url) {
+    try {
+      const r = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      return await r.json();
+    } catch (e) { console.warn('Fetch error', e); return {}; }
+  }
+
+  async function loadBrandsCR() {
+    if (!crItem || !crBrand) return;
+    const name = crItem.value;
+    const buildOptions = (brands)=>{
+      const opts = ['<option value="">Select brand</option>'];
+      brands.forEach(b=>{
+        const brandName = (b.brand && b.brand.trim()) ? b.brand : 'Unbranded';
+        const qty = typeof b.quantity === 'number' ? b.quantity : 0;
+        opts.push(`<option value="${brandName}">${brandName} (${qty} available)</option>`);
+      });
+      return opts.join('');
+    };
+    if (!name) {
+      const html = '<option value="">Select item first</option>';
+      if (window.jQuery && jQuery.fn.select2) {
+        const $b = jQuery(crBrand);
+        $b.html(html).val('').trigger('change');
+      } else if (crBrand) {
+        crBrand.innerHTML = html;
+      }
+      if (crBrandHint) {
+        crBrandHint.textContent = 'Choose brand after selecting item';
+      }
+      return;
+    }
+    try {
+      const apiUrl = '{% url "tracker:api_inventory_brands" %}';
+      const data = await fetchJSON(apiUrl + '?name=' + encodeURIComponent(name));
+      const brands = data.brands || [];
+      const html = buildOptions(brands);
+      if (window.jQuery && jQuery.fn.select2) {
+        const $b = jQuery(crBrand);
+        $b.html(html).val('').trigger('change');
+      } else {
+        crBrand.innerHTML = html;
+      }
+      
+      if (crBrandHint) {
+        crBrandHint.textContent = brands.length 
+          ? brands.length + ' brands available' 
+          : 'No brands in stock';
+      }
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+      if (crBrandHint) {
+        crBrandHint.textContent = 'Error loading brands';
+      }
+    }
+  }
+
+  async function checkStockCR() {
+    if (!crItem || !crBrand || !crStockInfo) return;
+    const name = crItem.value;
+    const brand = crBrand.value;
+    const qty = parseInt(crQty?.value || 1);
+    if (!name || !brand) { crStockInfo.style.display = 'none'; return; }
+    const params = new URLSearchParams({ name, brand });
+    const data = await fetchJSON('{% url 'tracker:api_inventory_stock' %}?' + params.toString());
+    const available = data.available || 0;
+    crStockText.textContent = `${available} units available`;
+    let klass = 'badge ';
+    let text = '';
+    if (available === 0) { klass += 'bg-danger'; text = 'Out of Stock'; }
+    else if (available < qty) { klass += 'bg-warning text-dark'; text = 'Insufficient Stock'; }
+    else if (available < 5) { klass += 'bg-warning text-dark'; text = 'Low Stock'; }
+    else { klass += 'bg-success'; text = 'In Stock'; }
+    crStockBadge.innerHTML = `<span class="${klass}">${text}</span>`;
+    crStockInfo.style.display = '';
+  }
+
+  crItem?.addEventListener('change', () => { loadBrandsCR(); checkStockCR(); });
+  if (window.jQuery && jQuery.fn.select2 && crItem) {
+    jQuery(crItem).on('select2:select', () => { loadBrandsCR(); checkStockCR(); });
+  }
+  crBrand?.addEventListener('change', checkStockCR);
+  if (crBrand) {
+    crBrand.addEventListener('focus', () => { if (!crBrand.options || crBrand.options.length <= 1) loadBrandsCR(); });
+  }
+  crQty?.addEventListener('input', debounce(checkStockCR, 300));
+
+  // Initialize if prefilled
+  loadBrandsCR();
+  checkStockCR();
+  
+  // Utility function
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+  
+  // Initialize feather icons
+  if (window.feather) {
+    feather.replace();
+  }
+  
+})();
+</script>
+{% endblock %}
