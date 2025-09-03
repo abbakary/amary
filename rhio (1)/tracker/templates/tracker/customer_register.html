@@ -426,108 +426,121 @@
 
           <!-- Order Details Sections -->
           <div class="row g-3">
-            <!-- Service Details -->
-            <div class="col-lg-4">
-              <div id="serviceFields" class="card" style="display:none;">
-                <div class="card-header bg-primary text-white">
-                  <h6 class="mb-0">
-                    <i data-feather="tool" class="me-1"></i>Service Details
-                  </h6>
-                </div>
-                <div class="card-body">
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Services Required</label>
-                    <div class="row g-2">
-                      {% for cb in order_form.service_selection %}
-                        <div class="col-sm-6">
-                          <div class="form-check">
-                            {{ cb.tag }}
-                            <label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
+            {% if intent == 'service' %}
+              <!-- Service Details -->
+              <div class="col-lg-6">
+                <div id="serviceFields" class="card">
+                  <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">
+                      <i data-feather="tool" class="me-1"></i>Service Details
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Services Required</label>
+                      <div class="row g-2">
+                        {% for cb in order_form.service_selection %}
+                          <div class="col-sm-6">
+                            <div class="form-check">
+                              {{ cb.tag }}
+                              <label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
+                            </div>
                           </div>
-                        </div>
-                      {% endfor %}
+                        {% endfor %}
+                      </div>
+                      <div class="form-text">Select all services needed</div>
                     </div>
-                    <div class="form-text">Select all services needed</div>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Estimated Duration (minutes)</label>
-                    {{ order_form.estimated_duration }}
-                    <div class="form-text">How long will this take?</div>
-                  </div>
-                  <div class="mb-0">
-                    <label class="form-label fw-semibold">Problem Description</label>
-                    {{ order_form.description }}
-                    <div class="form-text">Describe the issue or service needed</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Sales Details -->
-            <div class="col-lg-4">
-              <div id="salesFields" class="card" style="display:none;">
-                <div class="card-header bg-success text-white">
-                  <h6 class="mb-0">
-                    <i data-feather="shopping-cart" class="me-1"></i>Sales Details
-                  </h6>
-                </div>
-                <div class="card-body">
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Item Name</label>
-                    {{ order_form.item_name }}
-                  </div>
-                  <div class="mb-1">
-                    <label class="form-label fw-semibold">Brand</label>
-                    {{ order_form.brand }}
-                    <div id="crBrandHint" class="form-text">Choose brand after selecting item</div>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Quantity</label>
-                    {{ order_form.quantity }}
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Tire Condition</label>
-                    {{ order_form.tire_type }}
-                  </div>
-                  <div id="crStockInfo" class="alert alert-light border d-flex justify-content-between align-items-center" style="display:none;">
-                    <div>
-                      <small class="fw-semibold">Stock Status:</small>
-                      <span id="crStockText">Checking availability...</span>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Estimated Duration (minutes)</label>
+                      {{ order_form.estimated_duration }}
+                      <div class="form-text">How long will this take?</div>
                     </div>
-                    <div id="crStockBadge"></div>
+                    <div class="mb-0">
+                      <label class="form-label fw-semibold">Problem Description</label>
+                      {{ order_form.description }}
+                      <div class="form-text">Describe the issue or service needed</div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <!-- Inquiry Details -->
-            <div class="col-lg-4">
-              <div id="inquiryFields" class="card" style="display:none;">
-                <div class="card-header bg-info text-white">
-                  <h6 class="mb-0">
-                    <i data-feather="message-circle" class="me-1"></i>Inquiry Details
-                  </h6>
-                </div>
-                <div class="card-body">
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Inquiry Type</label>
-                    {{ order_form.inquiry_type }}
+            {% elif intent == 'sales' %}
+              <!-- Sales Details -->
+              <div class="col-lg-6">
+                <div id="salesFields" class="card">
+                  <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                      <i data-feather="shopping-cart" class="me-1"></i>Sales Details
+                    </h6>
                   </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Questions</label>
-                    {{ order_form.questions }}
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Contact Preference</label>
-                    {{ order_form.contact_preference }}
-                  </div>
-                  <div class="mb-0">
-                    <label class="form-label fw-semibold">Follow-up Date</label>
-                    {{ order_form.follow_up_date }}
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Item Name</label>
+                      {{ order_form.item_name }}
+                    </div>
+                    <div class="mb-1">
+                      <label class="form-label fw-semibold">Brand</label>
+                      {{ order_form.brand }}
+                      <div id="crBrandHint" class="form-text">Choose brand after selecting item</div>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Quantity</label>
+                      {{ order_form.quantity }}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Tire Condition</label>
+                      {{ order_form.tire_type }}
+                    </div>
+                    <div id="crStockInfo" class="alert alert-light border d-flex justify-content-between align-items-center" style="display:none;">
+                      <div>
+                        <small class="fw-semibold">Stock Status:</small>
+                        <span id="crStockText">Checking availability...</span>
+                      </div>
+                      <div id="crStockBadge"></div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            {% elif intent == 'inquiry' %}
+              <!-- Inquiry Details -->
+              <div class="col-lg-6">
+                <div id="inquiryFields" class="card">
+                  <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                      <i data-feather="message-circle" class="me-1"></i>Inquiry Details
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Inquiry Type</label>
+                      {{ order_form.inquiry_type }}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Questions</label>
+                      {{ order_form.questions }}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Contact Preference</label>
+                      {{ order_form.contact_preference }}
+                    </div>
+                    <div class="mb-0">
+                      <label class="form-label fw-semibold">Follow-up Date</label>
+                      {{ order_form.follow_up_date }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% else %}
+              <!-- Fallback: show all (JS will toggle) -->
+              <div class="col-lg-4">
+                <div id="serviceFields" class="card" style="display:none;">...</div>
+              </div>
+              <div class="col-lg-4">
+                <div id="salesFields" class="card" style="display:none;">...</div>
+              </div>
+              <div class="col-lg-4">
+                <div id="inquiryFields" class="card" style="display:none;">...</div>
+              </div>
+            {% endif %}
           </div>
         </div>
 
