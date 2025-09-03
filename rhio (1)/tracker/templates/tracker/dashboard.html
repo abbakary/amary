@@ -64,7 +64,7 @@
     <div class="row g-4 mb-2 align-items-center">
       <div class="col-12 col-xl-8">
         <div class="d-flex align-items-center gap-2">
-          <h4 class="mb-0">Welcome, {{ request.user.first_name|default:request.user.username }}</h4>
+          <h4 class="mb-0">Welcome, {{ request.user.first_name|default:request.user.username }} <span class="greet-hand" aria-hidden="true">👋</span></h4>
         </div>
         <p class="text-muted mb-0">Here’s what’s happening with your workshop today.</p>
       </div>
