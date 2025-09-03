@@ -442,6 +442,15 @@
       s.classList.toggle('active', match);
       s.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled = !match; });
     });
+    // dynamic requireds
+    const setReq = (sel, req) => { const el = document.querySelector(sel); if (el) el.required = !!req; };
+    setReq('[name="description"]', type==='service');
+    setReq('[name="estimated_duration"]', type==='service');
+    setReq('[name="item_name"]', type==='sales');
+    setReq('[name="brand"]', type==='sales');
+    setReq('[name="quantity"]', type==='sales');
+    setReq('[name="inquiry_type"]', type==='consultation');
+    setReq('[name="questions"]', type==='consultation');
   }
   typeCards.forEach(card => {
     const radio = card.querySelector('input[type="radio"]');
