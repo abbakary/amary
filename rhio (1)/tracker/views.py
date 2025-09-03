@@ -1339,3 +1339,56 @@ def reports_advanced(request: HttpRequest):
     }
 
     return render(request, 'tracker/reports_advanced.html', context)
+
+# ---------------------------
+# System settings and admin
+# ---------------------------
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def system_settings(request: HttpRequest):
+    def defaults():
+        return {
+            'company_name': '',
+            'default_priority': 'medium',
+            'enable_unbranded_alias': True,
+            'allow_order_without_vehicle': True,
+            'sms_provider': 'none',
+        }
+    data = cache.get('system_settings', None) or defaults()
+    if request.method == 'POST':
+        form = SystemSettingsForm(request.POST)
+        if form.is_valid():
+            data = {**defaults(), **form.cleaned_data}
+            cache.set('system_settings', data, None)
+            messages.success(request, 'Settings updated')
+            return redirect('tracker:system_settings')
+        else:
+            messages.error(request, 'Please correct errors and try again')
+    else:
+        form = SystemSettingsForm(initial=data)
+    return render(request, 'tracker/system_settings.html', {'form': form, 'settings': data})
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def audit_logs(request: HttpRequest):
+    logs = cache.get('audit_logs', [])
+    return render(request, 'tracker/audit_logs.html', {'logs': logs})
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def backup_restore(request: HttpRequest):
+    if request.GET.get('download'):
+        import json
+        payload = {
+            'system_settings': cache.get('system_settings', {}),
+        }
+        resp = HttpResponse(json.dumps(payload, indent=2), content_type='application/json')
+        resp['Content-Disposition'] = 'attachment; filename="backup.json"'
+        return resp
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'reset_settings':
+            cache.delete('system_settings')
+            messages.success(request, 'System settings have been reset to defaults')
+            return redirect('tracker:backup_restore')
+    return render(request, 'tracker/backup_restore.html')
