@@ -562,6 +562,7 @@
   try {
     const draft = JSON.parse(localStorage.getItem(key) || '{}');
     Object.entries(draft).forEach(([name, val]) => {
+      if (name === 'csrfmiddlewaretoken') return; // never restore CSRF token
       const el = form.querySelector(`[name="${name}"]`);
       if (!el) return;
       if (el.type === 'checkbox' || el.type === 'radio') {
@@ -578,7 +579,7 @@
   form?.addEventListener('input', debounce(() => {
     const data = {};
     form.querySelectorAll('input, select, textarea').forEach(el => {
-      if (el.name) {
+      if (el.name && el.name !== 'csrfmiddlewaretoken') {
         data[el.name] = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value;
       }
     });
