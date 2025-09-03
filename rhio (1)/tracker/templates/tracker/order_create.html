@@ -634,19 +634,22 @@
       loadBrands();
       checkStock();
     });
+    if ($ && $.fn.select2) {
+      $(itemSelect).on('select2:select', () => { loadBrands(); checkStock(); });
+    }
   }
-  
+
   if (brandSelect) {
     brandSelect.addEventListener('change', () => {
-      // Immediate hint from selected option's data-qty
       const opt = brandSelect.options[brandSelect.selectedIndex];
       const hintEl = document.getElementById('brandStock') || document.getElementById('brand-stock-hint');
       const q = Number(opt?.dataset?.qty || 0);
       if (hintEl) hintEl.textContent = opt && brandSelect.value ? `Available: ${q}` : '';
       checkStock();
     });
+    brandSelect.addEventListener('focus', () => { if (!brandSelect.options || brandSelect.options.length <= 1) loadBrands(); });
   }
-  
+
   if (qtyInput) {
     qtyInput.addEventListener('input', debounce(checkStock, 300));
   }
