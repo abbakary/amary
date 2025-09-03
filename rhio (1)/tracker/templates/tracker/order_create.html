@@ -544,9 +544,23 @@
   async function loadBrands() {
     if (!itemSelect || !brandSelect) return;
     const itemName = itemSelect.value;
-    
+    const buildOptions = (brands) => {
+      const opts = ['<option value="">Select brand</option>'];
+      brands.forEach(b => {
+        const brandName = (b.brand && b.brand.trim()) ? b.brand : 'Unbranded';
+        const qty = typeof b.quantity === 'number' ? b.quantity : 0;
+        opts.push(`<option value="${brandName}" data-qty="${qty}">${brandName} (${qty} available)</option>`);
+      });
+      return opts.join('');
+    };
     if (!itemName) {
-      brandSelect.innerHTML = '<option value="">Select item first</option>';
+      const html = '<option value="">Select item first</option>';
+      if ($ && $.fn.select2) {
+        const $b = $(brandSelect);
+        $b.html(html).val('').trigger('change');
+      } else {
+        brandSelect.innerHTML = html;
+      }
       if (brandStock) brandStock.textContent = 'Choose brand after selecting item';
       return;
     }
@@ -554,16 +568,13 @@
     try {
       const data = await fetchJSON(`{% url 'tracker:api_inventory_brands' %}?name=${encodeURIComponent(itemName)}`);
       const brands = data.brands || [];
-
-      brandSelect.innerHTML = '<option value="">Select brand</option>' +
-        brands.map(b => {
-          const brandName = (b.brand && b.brand.trim()) ? b.brand : 'Unbranded';
-          const qty = typeof b.quantity === 'number' ? b.quantity : 0;
-          return `<option value="${brandName}" data-qty="${qty}">${brandName} (${qty} available)</option>`;
-        }).join('');
+      const html = buildOptions(brands);
 
       if ($ && $.fn.select2) {
-        $(brandSelect).trigger('change.select2');
+        const $b = $(brandSelect);
+        $b.html(html).val('').trigger('change');
+      } else {
+        brandSelect.innerHTML = html;
       }
 
       if (brandStock) {
