@@ -561,56 +561,103 @@ def update_order_status(request: HttpRequest, pk: int):
 
 @login_required
 def analytics(request: HttpRequest):
-    # Reuse dashboard datasets for charts
-    status_counts_qs = Order.objects.values("status").annotate(c=Count("id"))
-    type_counts_qs = Order.objects.values("type").annotate(c=Count("id"))
-
-    status_counts = {x["status"]: x["c"] for x in status_counts_qs}
-    type_counts = {x["type"]: x["c"] for x in type_counts_qs}
+    from datetime import timedelta
+    period = request.GET.get('period', 'monthly')
 
     today = timezone.localdate()
-    dates = [today - timezone.timedelta(days=i) for i in range(13, -1, -1)]
-    trend_qs = (
-        Order.objects.annotate(day=TruncDate("created_at")).values("day").annotate(c=Count("id"))
-    )
-    trend_map = {row["day"]: row["c"] for row in trend_qs}
-    trend_labels = [d.strftime("%Y-%m-%d") for d in dates]
-    trend_values = [trend_map.get(d, 0) for d in dates]
+    if period == 'daily':
+        start_date = today
+        end_date = today
+        labels = [f"{i:02d}:00" for i in range(24)]
+    elif period == 'weekly':
+        start_date = today - timedelta(days=6)
+        end_date = today
+        labels = [(start_date + timedelta(days=i)).strftime('%a') for i in range(7)]
+    elif period == 'yearly':
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+        labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    else:  # monthly
+        start_date = today - timedelta(days=29)
+        end_date = today
+        labels = [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30)]
 
-    dur_qs = (
-        Order.objects.filter(actual_duration__isnull=False)
-        .values("type")
-        .annotate(avg=Avg("actual_duration"))
-    )
-    dur_labels = [
-        {"service": "Service", "sales": "Sales", "consultation": "Consultation"}.get(r["type"], r["type"]) for r in dur_qs
-    ]
-    dur_values = [int(r["avg"]) for r in dur_qs]
+    qs = Order.objects.filter(created_at__date__range=[start_date, end_date])
+    status_counts = {row['status']: row['c'] for row in qs.values('status').annotate(c=Count('id'))}
+    type_counts = {row['type']: row['c'] for row in qs.values('type').annotate(c=Count('id'))}
+    priority_counts = {row['priority']: row['c'] for row in qs.values('priority').annotate(c=Count('id'))}
+
+    # Trend by selected period
+    if period == 'daily':
+        from django.db.models.functions import ExtractHour
+        trend_map = {int(row['h'] or 0): row['c'] for row in qs.annotate(h=ExtractHour('created_at')).values('h').annotate(c=Count('id'))}
+        trend_values = [trend_map.get(h, 0) for h in range(24)]
+        trend_labels = labels
+    elif period == 'weekly':
+        by_date = {row['day']: row['c'] for row in qs.annotate(day=TruncDate('created_at')).values('day').annotate(c=Count('id'))}
+        trend_values = []
+        for i in range(7):
+            d = start_date + timezone.timedelta(days=i)
+            trend_values.append(by_date.get(d, 0))
+        trend_labels = labels
+    elif period == 'yearly':
+        from django.db.models.functions import ExtractMonth
+        by_month = {int(row['m']): row['c'] for row in qs.annotate(m=ExtractMonth('created_at')).values('m').annotate(c=Count('id'))}
+        trend_values = [by_month.get(i, 0) for i in range(1, 13)]
+        trend_labels = labels
+    else:  # monthly
+        by_date = {row['day']: row['c'] for row in qs.annotate(day=TruncDate('created_at')).values('day').annotate(c=Count('id'))}
+        trend_values = []
+        for i in range(30):
+            d = start_date + timezone.timedelta(days=i)
+            trend_values.append(by_date.get(d, 0))
+        trend_labels = labels
 
     charts = {
-        "status": {
-            "labels": ["Created", "Assigned", "In Progress", "Completed", "Cancelled"],
-            "values": [
-                status_counts.get("created", 0),
-                status_counts.get("assigned", 0),
-                status_counts.get("in_progress", 0),
-                status_counts.get("completed", 0),
-                status_counts.get("cancelled", 0),
-            ],
+        'status': {
+            'labels': ['Created','Assigned','In Progress','Completed','Cancelled'],
+            'values': [
+                status_counts.get('created',0),
+                status_counts.get('assigned',0),
+                status_counts.get('in_progress',0),
+                status_counts.get('completed',0),
+                status_counts.get('cancelled',0),
+            ]
         },
-        "type": {
-            "labels": ["Service", "Sales", "Consultation"],
-            "values": [
-                type_counts.get("service", 0),
-                type_counts.get("sales", 0),
-                type_counts.get("consultation", 0),
-            ],
+        'type': {
+            'labels': ['Service','Sales','Consultation'],
+            'values': [
+                type_counts.get('service',0),
+                type_counts.get('sales',0),
+                type_counts.get('consultation',0),
+            ]
         },
-        "trend": {"labels": trend_labels, "values": trend_values},
-        "avg_duration": {"labels": dur_labels, "values": dur_values},
+        'priority': {
+            'labels': ['Low','Medium','High','Urgent'],
+            'values': [
+                priority_counts.get('low',0),
+                priority_counts.get('medium',0),
+                priority_counts.get('high',0),
+                priority_counts.get('urgent',0),
+            ]
+        },
+        'trend': { 'labels': trend_labels, 'values': trend_values },
     }
 
-    return render(request, "tracker/analytics.html", {"charts_json": json.dumps(charts)})
+    totals = {
+        'total_orders': qs.count(),
+        'completed': qs.filter(status='completed').count(),
+        'in_progress': qs.filter(status__in=['created','assigned','in_progress']).count(),
+        'customers': Customer.objects.filter(registration_date__date__range=[start_date, end_date]).count(),
+    }
+
+    return render(request, 'tracker/analytics.html', {
+        'charts_json': json.dumps(charts),
+        'totals': totals,
+        'period': period,
+        'export_from': start_date.isoformat(),
+        'export_to': end_date.isoformat(),
+    })
 
 
 @login_required
