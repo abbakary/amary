@@ -55,6 +55,24 @@ def send_sms(phone: str, message: str) -> tuple[bool, str]:
     return False, "No SMS provider configured. Set ZAPIER_SMS_WEBHOOK_URL or Twilio env vars."
 
 
+from django.core.cache import cache
+
+def clear_inventory_cache(name: str | None = None, brand: str | None = None) -> None:
+    try:
+        cache.delete('api_inv_items_v1')
+        cache.delete('dashboard_metrics_v1')
+        if name:
+            cache.delete(f'api_inv_brands_{name}')
+            # Invalidate stock caches for specific brand, unbranded alias, and any-brand aggregate
+            keys = {f"api_inv_stock_{name}_{brand or 'any'}", f"api_inv_stock_{name}_any"}
+            if (brand or '').lower() == 'unbranded' or not (brand or '').strip():
+                keys.add(f"api_inv_stock_{name}_any")
+            for k in keys:
+                cache.delete(k)
+    except Exception:
+        pass
+
+
 def adjust_inventory(name: str, brand: str, qty_delta: int) -> tuple[bool, str, int | None]:
     """Adjust inventory by name+brand with qty_delta (negative to deduct, positive to restock).
     Returns (ok, status, remaining_qty). status in {ok, not_found, invalid}.
@@ -65,7 +83,12 @@ def adjust_inventory(name: str, brand: str, qty_delta: int) -> tuple[bool, str, 
         brand = (brand or '').strip()
         if not name:
             return False, 'invalid', None
-        item = InventoryItem.objects.filter(name=name, brand=brand).first()
+        # Support alias 'Unbranded' which maps to empty/null brand rows
+        if brand.lower() == 'unbranded':
+            from django.db.models import Q
+            item = InventoryItem.objects.filter(name=name).filter(Q(brand__isnull=True) | Q(brand="")).first()
+        else:
+            item = InventoryItem.objects.filter(name=name, brand=brand).first()
         if not item:
             return False, 'not_found', None
         new_qty = item.quantity + int(qty_delta)
@@ -73,6 +96,7 @@ def adjust_inventory(name: str, brand: str, qty_delta: int) -> tuple[bool, str, 
             new_qty = 0
         item.quantity = new_qty
         item.save()
+        clear_inventory_cache(name, brand)
         return True, 'ok', new_qty
     except Exception as e:
         return False, str(e), None

@@ -23,7 +23,19 @@
         <option value="consultation" {% if filters.type == 'consultation' %}selected{% endif %}>Consultation</option>
       </select>
     </div>
-    <div class="col-auto"><button class="btn btn-outline-primary" type="submit">Apply</button></div>
+    <div class="col-auto d-flex gap-2">
+      <button class="btn btn-outline-primary" type="submit">Apply</button>
+      <div class="btn-group">
+        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Quick Range</button>
+        <ul class="dropdown-menu">
+          <li><a class="dropdown-item" href="#" data-range="daily">Today</a></li>
+          <li><a class="dropdown-item" href="#" data-range="weekly">Last 7 days</a></li>
+          <li><a class="dropdown-item" href="#" data-range="monthly">Last 30 days</a></li>
+          <li><a class="dropdown-item" href="#" data-range="yearly">This Year</a></li>
+        </ul>
+      </div>
+      <a class="btn btn-outline-success" id="exportBtn" href="{% url 'tracker:reports_export' %}?from={{ filters.from }}&to={{ filters.to }}&type={{ filters.type }}">Export CSV</a>
+    </div>
   </form>
 
   <div class="row g-3">
@@ -89,6 +101,23 @@
     if (el && window.simpleDatatables) {
       new simpleDatatables.DataTable(el, { searchable: true, perPage: 10, perPageSelect: [10,25,50,100] });
     }
+    // Quick range presets
+    const pad = n => n.toString().padStart(2,'0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    document.querySelectorAll('[data-range]')?.forEach(a => a.addEventListener('click', e => {
+      e.preventDefault();
+      const r = a.dataset.range;
+      const now = new Date();
+      let from = new Date(now), to = new Date(now);
+      if (r === 'weekly') from.setDate(now.getDate() - 6);
+      else if (r === 'monthly') from.setDate(now.getDate() - 29);
+      else if (r === 'yearly') { from = new Date(now.getFullYear(), 0, 1); }
+      document.getElementById('fromDate').value = fmt(from);
+      document.getElementById('toDate').value = fmt(to);
+      const exportBtn = document.getElementById('exportBtn');
+      const type = document.querySelector('select[name="type"]').value;
+      exportBtn.href = `{% url 'tracker:reports_export' %}?from=${fmt(from)}&to=${fmt(to)}&type=${encodeURIComponent(type)}`;
+    }));
   })();
 </script>
 {% endblock %}

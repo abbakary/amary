@@ -8,6 +8,7 @@
 {% block content %}
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0">Advanced Reports</h4>
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'tracker:reports_export' %}?from={{ start_date }}&to={{ end_date }}&type=all">Export CSV</a>
   </div>
 
   <form method="get" class="row g-2 mb-3">
@@ -36,6 +37,24 @@
     <div class="col-md-3"><div class="card text-center"><div class="card-body"><div class="text-muted">Completed</div><div class="display-6">{{ stats.completed_orders }}</div></div></div></div>
     <div class="col-md-3"><div class="card text-center"><div class="card-body"><div class="text-muted">Pending</div><div class="display-6">{{ stats.pending_orders }}</div></div></div></div>
     <div class="col-md-3"><div class="card text-center"><div class="card-body"><div class="text-muted">Avg Duration</div><div class="display-6">{{ stats.avg_duration }}m</div></div></div></div>
+  </div>
+
+  <div class="row g-3 mt-3">
+    <div class="col-lg-6">
+      <div class="card h-100"><div class="card-header"><h6 class="mb-0">Orders Trend</h6></div><div class="card-body"><div id="trendChart"></div></div></div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100"><div class="card-header"><h6 class="mb-0">Status Breakdown</h6></div><div class="card-body"><div id="statusChart"></div></div></div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-lg-6">
+      <div class="card h-100"><div class="card-header"><h6 class="mb-0">Orders by Type</h6></div><div class="card-body"><div id="typeChart"></div></div></div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100"><div class="card-header"><h6 class="mb-0">Customers by Type</h6></div><div class="card-body"><div id="custTypeChart"></div></div></div>
+    </div>
   </div>
 
   <div class="card mt-3">
@@ -104,12 +123,30 @@
 {% endblock %}
 {% block scripts %}
 <script src="{% static 'js/js-datatables/simple-datatables@latest.js' %}"></script>
+<script id="chartdata" type="application/json">{{ chart_data|safe }}</script>
 <script>
   (function(){
     const el = document.querySelector('#advReportsTable');
     if (el && window.simpleDatatables) {
       new simpleDatatables.DataTable(el, { searchable: true, perPage: 10, perPageSelect: [10,25,50,100] });
     }
+    const dataEl = document.getElementById('chartdata');
+    if (!dataEl || !window.ApexCharts) return;
+    try{
+      const data = JSON.parse(dataEl.textContent || '{}');
+      const donut = (selector, d) => new ApexCharts(document.querySelector(selector), {
+        chart:{type:'donut', height:260, fontFamily:'inherit'}, labels:d.labels, series:d.values,
+        legend:{position:'bottom'}, dataLabels:{enabled:false}
+      }).render();
+      if (data.trend) new ApexCharts(document.querySelector('#trendChart'), {
+        chart:{type:'area', height:260, toolbar:{show:false}, fontFamily:'inherit'},
+        series:[{name:'Orders', data:data.trend.values}], xaxis:{categories:data.trend.labels},
+        dataLabels:{enabled:false}, stroke:{curve:'smooth', width:2}, fill:{type:'gradient', gradient:{opacityFrom:0.4, opacityTo:0.1}}
+      }).render();
+      if (data.status) donut('#statusChart', data.status);
+      if (data.orders) donut('#typeChart', data.orders);
+      if (data.types) donut('#custTypeChart', data.types);
+    }catch(e){ console.warn(e); }
   })();
 </script>
 {% endblock %}

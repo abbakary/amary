@@ -6,6 +6,7 @@ from django.contrib.auth.views import LoginView
 from django.urls import reverse
 from django.contrib import messages
 from django.db.models.functions import TruncDate
+from django.core.cache import cache
 import json
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User, Group
@@ -51,32 +52,55 @@ class CustomLoginView(LoginView):
 
 @login_required
 def dashboard(request: HttpRequest):
-    total_orders = Order.objects.count()
-    total_customers = Customer.objects.count()
-    status_counts_qs = Order.objects.values("status").annotate(c=Count("id"))
-    type_counts_qs = Order.objects.values("type").annotate(c=Count("id"))
-    priority_counts_qs = Order.objects.values("priority").annotate(c=Count("id"))
+    cache_key = "dashboard_metrics_v1"
+    cached = cache.get(cache_key)
+    if cached:
+        (
+            total_orders,
+            total_customers,
+            status_counts,
+            type_counts,
+            priority_counts,
+            completed_today_count,
+            trend_labels,
+            trend_values,
+            total_stock,
+        ) = cached
+    else:
+        total_orders = Order.objects.count()
+        total_customers = Customer.objects.count()
+        status_counts_qs = Order.objects.values("status").annotate(c=Count("id"))
+        type_counts_qs = Order.objects.values("type").annotate(c=Count("id"))
+        priority_counts_qs = Order.objects.values("priority").annotate(c=Count("id"))
+        status_counts = {x["status"]: x["c"] for x in status_counts_qs}
+        type_counts = {x["type"]: x["c"] for x in type_counts_qs}
+        priority_counts = {x["priority"]: x["c"] for x in priority_counts_qs}
+        today = timezone.localdate()
+        completed_today_count = Order.objects.filter(status="completed", completed_at__date=today).count()
+        dates = [today - timezone.timedelta(days=i) for i in range(13, -1, -1)]
+        trend_qs = (
+            Order.objects.annotate(day=TruncDate("created_at")).values("day").annotate(c=Count("id"))
+        )
+        trend_map = {row["day"]: row["c"] for row in trend_qs}
+        trend_labels = [d.strftime("%Y-%m-%d") for d in dates]
+        trend_values = [trend_map.get(d, 0) for d in dates]
+        total_stock = InventoryItem.objects.aggregate(total=Sum('quantity'))['total'] or 0
+        cache.set(cache_key, (
+            total_orders,
+            total_customers,
+            status_counts,
+            type_counts,
+            priority_counts,
+            completed_today_count,
+            trend_labels,
+            trend_values,
+            total_stock,
+        ), 60)
 
-    status_counts = {x["status"]: x["c"] for x in status_counts_qs}
-    type_counts = {x["type"]: x["c"] for x in type_counts_qs}
-    priority_counts = {x["priority"]: x["c"] for x in priority_counts_qs}
-
-    # KPI metrics
     today = timezone.localdate()
     pending_count = status_counts.get("created", 0)
     in_progress_count = status_counts.get("in_progress", 0)
     active_count = status_counts.get("created", 0) + status_counts.get("assigned", 0) + status_counts.get("in_progress", 0)
-    completed_today_count = Order.objects.filter(status="completed", completed_at__date=today).count()
-
-    # Trend: last 14 days orders created
-    dates = [today - timezone.timedelta(days=i) for i in range(13, -1, -1)]
-    trend_qs = (
-        Order.objects.annotate(day=TruncDate("created_at")).values("day").annotate(c=Count("id"))
-    )
-    trend_map = {row["day"]: row["c"] for row in trend_qs}
-    trend_labels = [d.strftime("%Y-%m-%d") for d in dates]
-    trend_values = [trend_map.get(d, 0) for d in dates]
-
     recent_orders = (
         Order.objects.select_related("customer", "vehicle")
         .exclude(status="completed")
@@ -86,10 +110,6 @@ def dashboard(request: HttpRequest):
     can_manage_inventory = (request.user.is_superuser or request.user.groups.filter(name='manager').exists())
     completed = status_counts.get("completed", 0)
     completed_percent = int((completed * 100) / total_orders) if total_orders else 0
-
-    # Inventory KPI
-    total_stock = InventoryItem.objects.aggregate(total=Sum('quantity'))['total'] or 0
-
     charts = {
         "status": {
             "labels": ["Created", "Assigned", "In Progress", "Completed", "Cancelled"],
@@ -324,9 +344,16 @@ def customer_register(request: HttpRequest):
     else:
         context["form"] = CustomerStep4Form()
         context["vehicle_form"] = VehicleForm()
-        # Prefill order type based on intent
+        # Include previous steps for summary
+        context["step1"] = request.session.get("reg_step1", {})
+        context["step2"] = session_step2
+        context["step3"] = request.session.get("reg_step3", {})
+        # Prefill order type based on intent and selected services
         type_map = {"service": "service", "sales": "sales", "inquiry": "consultation"}
         order_initial = {"type": type_map.get(intent)} if intent in type_map else {}
+        sel_services = context["step3"].get("service_type") or []
+        if sel_services:
+            order_initial["service_selection"] = sel_services
         context["order_form"] = OrderForm(initial=order_initial)
     return render(request, "tracker/customer_register.html", context)
 
@@ -348,8 +375,11 @@ def create_order_for_customer(request: HttpRequest, pk: int):
                 name = (o.item_name or '').strip()
                 brand = (o.brand or '').strip()
                 qty = int(o.quantity or 0)
-                from django.db.models import Sum
-                available = InventoryItem.objects.filter(name=name, brand=brand).aggregate(total=Sum('quantity')).get('total') or 0
+                from django.db.models import Sum, Q
+                if (brand or '').lower() == 'unbranded':
+                    available = InventoryItem.objects.filter(name=name).filter(Q(brand__isnull=True) | Q(brand="")).aggregate(total=Sum('quantity')).get('total') or 0
+                else:
+                    available = InventoryItem.objects.filter(name=name, brand=brand).aggregate(total=Sum('quantity')).get('total') or 0
                 if not name or not brand or qty <= 0:
                     messages.error(request, 'Item, brand and valid quantity are required')
                     return render(request, "tracker/order_create.html", {"customer": c, "form": form})
@@ -384,7 +414,10 @@ def orders_list(request: HttpRequest):
         qs = qs.filter(status=status)
     if type_ != "all":
         qs = qs.filter(type=type_)
-    return render(request, "tracker/orders_list.html", {"orders": qs[:100]})
+    paginator = Paginator(qs, 20)
+    page = request.GET.get('page')
+    orders = paginator.get_page(page)
+    return render(request, "tracker/orders_list.html", {"orders": orders, "status": status, "type": type_})
 
 
 @login_required
@@ -397,7 +430,12 @@ def order_start(request: HttpRequest):
             form = OrderForm()
             form.fields['vehicle'].queryset = c.vehicles.all()
             return render(request, "tracker/order_create.html", {"customer": c, "form": form})
-        return render(request, "tracker/order_create.html")
+        form = OrderForm()
+        try:
+            form.fields['vehicle'].queryset = Vehicle.objects.none()
+        except Exception:
+            pass
+        return render(request, "tracker/order_create.html", {"form": form})
 
     # Handle POST (AJAX or standard form submit)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -463,7 +501,11 @@ def order_start(request: HttpRequest):
             name = (o.item_name or '').strip()
             brand = (o.brand or '').strip()
             qty = int(o.quantity or 0)
-            available = InventoryItem.objects.filter(name=name, brand=brand).aggregate(total=Sum('quantity')).get('total') or 0
+            from django.db.models import Q, Sum
+            if (brand or '').lower() == 'unbranded':
+                available = InventoryItem.objects.filter(name=name).filter(Q(brand__isnull=True) | Q(brand="")).aggregate(total=Sum('quantity')).get('total') or 0
+            else:
+                available = InventoryItem.objects.filter(name=name, brand=brand).aggregate(total=Sum('quantity')).get('total') or 0
             if not name or not brand or qty <= 0:
                 messages.error(request, 'Item, brand and valid quantity are required')
                 return render(request, "tracker/order_create.html", {"customer": c, "form": form})
@@ -526,56 +568,103 @@ def update_order_status(request: HttpRequest, pk: int):
 
 @login_required
 def analytics(request: HttpRequest):
-    # Reuse dashboard datasets for charts
-    status_counts_qs = Order.objects.values("status").annotate(c=Count("id"))
-    type_counts_qs = Order.objects.values("type").annotate(c=Count("id"))
-
-    status_counts = {x["status"]: x["c"] for x in status_counts_qs}
-    type_counts = {x["type"]: x["c"] for x in type_counts_qs}
+    from datetime import timedelta
+    period = request.GET.get('period', 'monthly')
 
     today = timezone.localdate()
-    dates = [today - timezone.timedelta(days=i) for i in range(13, -1, -1)]
-    trend_qs = (
-        Order.objects.annotate(day=TruncDate("created_at")).values("day").annotate(c=Count("id"))
-    )
-    trend_map = {row["day"]: row["c"] for row in trend_qs}
-    trend_labels = [d.strftime("%Y-%m-%d") for d in dates]
-    trend_values = [trend_map.get(d, 0) for d in dates]
+    if period == 'daily':
+        start_date = today
+        end_date = today
+        labels = [f"{i:02d}:00" for i in range(24)]
+    elif period == 'weekly':
+        start_date = today - timedelta(days=6)
+        end_date = today
+        labels = [(start_date + timedelta(days=i)).strftime('%a') for i in range(7)]
+    elif period == 'yearly':
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+        labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    else:  # monthly
+        start_date = today - timedelta(days=29)
+        end_date = today
+        labels = [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30)]
 
-    dur_qs = (
-        Order.objects.filter(actual_duration__isnull=False)
-        .values("type")
-        .annotate(avg=Avg("actual_duration"))
-    )
-    dur_labels = [
-        {"service": "Service", "sales": "Sales", "consultation": "Consultation"}.get(r["type"], r["type"]) for r in dur_qs
-    ]
-    dur_values = [int(r["avg"]) for r in dur_qs]
+    qs = Order.objects.filter(created_at__date__range=[start_date, end_date])
+    status_counts = {row['status']: row['c'] for row in qs.values('status').annotate(c=Count('id'))}
+    type_counts = {row['type']: row['c'] for row in qs.values('type').annotate(c=Count('id'))}
+    priority_counts = {row['priority']: row['c'] for row in qs.values('priority').annotate(c=Count('id'))}
+
+    # Trend by selected period
+    if period == 'daily':
+        from django.db.models.functions import ExtractHour
+        trend_map = {int(row['h'] or 0): row['c'] for row in qs.annotate(h=ExtractHour('created_at')).values('h').annotate(c=Count('id'))}
+        trend_values = [trend_map.get(h, 0) for h in range(24)]
+        trend_labels = labels
+    elif period == 'weekly':
+        by_date = {row['day']: row['c'] for row in qs.annotate(day=TruncDate('created_at')).values('day').annotate(c=Count('id'))}
+        trend_values = []
+        for i in range(7):
+            d = start_date + timezone.timedelta(days=i)
+            trend_values.append(by_date.get(d, 0))
+        trend_labels = labels
+    elif period == 'yearly':
+        from django.db.models.functions import ExtractMonth
+        by_month = {int(row['m']): row['c'] for row in qs.annotate(m=ExtractMonth('created_at')).values('m').annotate(c=Count('id'))}
+        trend_values = [by_month.get(i, 0) for i in range(1, 13)]
+        trend_labels = labels
+    else:  # monthly
+        by_date = {row['day']: row['c'] for row in qs.annotate(day=TruncDate('created_at')).values('day').annotate(c=Count('id'))}
+        trend_values = []
+        for i in range(30):
+            d = start_date + timezone.timedelta(days=i)
+            trend_values.append(by_date.get(d, 0))
+        trend_labels = labels
 
     charts = {
-        "status": {
-            "labels": ["Created", "Assigned", "In Progress", "Completed", "Cancelled"],
-            "values": [
-                status_counts.get("created", 0),
-                status_counts.get("assigned", 0),
-                status_counts.get("in_progress", 0),
-                status_counts.get("completed", 0),
-                status_counts.get("cancelled", 0),
-            ],
+        'status': {
+            'labels': ['Created','Assigned','In Progress','Completed','Cancelled'],
+            'values': [
+                status_counts.get('created',0),
+                status_counts.get('assigned',0),
+                status_counts.get('in_progress',0),
+                status_counts.get('completed',0),
+                status_counts.get('cancelled',0),
+            ]
         },
-        "type": {
-            "labels": ["Service", "Sales", "Consultation"],
-            "values": [
-                type_counts.get("service", 0),
-                type_counts.get("sales", 0),
-                type_counts.get("consultation", 0),
-            ],
+        'type': {
+            'labels': ['Service','Sales','Consultation'],
+            'values': [
+                type_counts.get('service',0),
+                type_counts.get('sales',0),
+                type_counts.get('consultation',0),
+            ]
         },
-        "trend": {"labels": trend_labels, "values": trend_values},
-        "avg_duration": {"labels": dur_labels, "values": dur_values},
+        'priority': {
+            'labels': ['Low','Medium','High','Urgent'],
+            'values': [
+                priority_counts.get('low',0),
+                priority_counts.get('medium',0),
+                priority_counts.get('high',0),
+                priority_counts.get('urgent',0),
+            ]
+        },
+        'trend': { 'labels': trend_labels, 'values': trend_values },
     }
 
-    return render(request, "tracker/analytics.html", {"charts_json": json.dumps(charts)})
+    totals = {
+        'total_orders': qs.count(),
+        'completed': qs.filter(status='completed').count(),
+        'in_progress': qs.filter(status__in=['created','assigned','in_progress']).count(),
+        'customers': Customer.objects.filter(registration_date__date__range=[start_date, end_date]).count(),
+    }
+
+    return render(request, 'tracker/analytics.html', {
+        'charts_json': json.dumps(charts),
+        'totals': totals,
+        'period': period,
+        'export_from': start_date.isoformat(),
+        'export_to': end_date.isoformat(),
+    })
 
 
 @login_required
@@ -695,13 +784,18 @@ def api_recent_orders(request: HttpRequest):
 @login_required
 def api_inventory_items(request: HttpRequest):
     from django.db.models import Sum
-    rows = (
-        InventoryItem.objects.values("name")
-        .annotate(total=Sum("quantity"))
-        .order_by("name")
-    )
-    items = [{"name": r["name"], "total_quantity": r["total"] or 0} for r in rows]
-    return JsonResponse({"items": items})
+    cache_key = "api_inv_items_v1"
+    data = cache.get(cache_key)
+    if not data:
+        rows = (
+            InventoryItem.objects.values("name")
+            .annotate(total=Sum("quantity"))
+            .order_by("name")
+        )
+        items = [{"name": r["name"], "total_quantity": r["total"] or 0} for r in rows]
+        data = {"items": items}
+        cache.set(cache_key, data, 120)
+    return JsonResponse(data)
 
 @login_required
 def api_inventory_brands(request: HttpRequest):
@@ -709,30 +803,62 @@ def api_inventory_brands(request: HttpRequest):
     name = request.GET.get("name", "").strip()
     if not name:
         return JsonResponse({"brands": []})
-    rows = (
-        InventoryItem.objects.filter(name=name)
-        .values("brand")
-        .annotate(quantity=Sum("quantity"), min_price=Min("price"))
-        .order_by("brand")
-    )
-    brands = [
-        {"brand": r["brand"] or "", "quantity": r["quantity"] or 0, "price": str(r["min_price"]) if r["min_price"] is not None else ""}
-        for r in rows
-    ]
-    return JsonResponse({"brands": brands})
+    cache_key = f"api_inv_brands_{name}"
+    data = cache.get(cache_key)
+    if not data:
+        # Aggregate by brand for this item
+        rows = (
+            InventoryItem.objects.filter(name=name)
+            .values("brand")
+            .annotate(quantity=Sum("quantity"), min_price=Min("price"))
+            .order_by("brand")
+        )
+        non_empty = []
+        unbranded_qty = 0
+        unbranded_price = None
+        for r in rows:
+            b = (r["brand"] or "").strip()
+            q = r["quantity"] or 0
+            p = r["min_price"]
+            if b:
+                non_empty.append({"brand": b, "quantity": q, "price": str(p) if p is not None else ""})
+            else:
+                unbranded_qty += q
+                if p is not None:
+                    unbranded_price = p if unbranded_price is None else min(unbranded_price, p)
+        brands = non_empty
+        # Always include an aggregated Unbranded option when quantity exists
+        if unbranded_qty > 0:
+            brands.append({
+                "brand": "Unbranded",
+                "quantity": unbranded_qty,
+                "price": str(unbranded_price) if unbranded_price is not None else ""
+            })
+        data = {"brands": brands}
+        cache.set(cache_key, data, 120)
+    return JsonResponse(data)
 
 @login_required
 def api_inventory_stock(request: HttpRequest):
-    from django.db.models import Sum
+    from django.db.models import Sum, Q
     name = request.GET.get("name", "").strip()
     brand = request.GET.get("brand", "").strip()
     if not name:
         return JsonResponse({"available": 0})
-    qs = InventoryItem.objects.filter(name=name)
-    if brand:
-        qs = qs.filter(brand=brand)
-    total = qs.aggregate(total=Sum("quantity")).get("total") or 0
-    return JsonResponse({"available": total})
+    # Treat special alias 'Unbranded' as brand is empty or null
+    effective_brand = None if brand.lower() == 'unbranded' else brand
+    cache_key = f"api_inv_stock_{name}_{(effective_brand or 'any')}"
+    data = cache.get(cache_key)
+    if data is None:
+        qs = InventoryItem.objects.filter(name=name)
+        if effective_brand is not None and effective_brand != "":
+            qs = qs.filter(brand=effective_brand)
+        elif brand.lower() == 'unbranded':
+            qs = qs.filter(Q(brand__isnull=True) | Q(brand=""))
+        total = qs.aggregate(total=Sum("quantity")).get("total") or 0
+        data = {"available": total}
+        cache.set(cache_key, data, 60)
+    return JsonResponse(data)
 
 # Permissions
 is_manager = user_passes_test(lambda u: u.is_authenticated and (u.is_superuser or u.groups.filter(name='manager').exists()))
@@ -756,7 +882,9 @@ def inventory_create(request: HttpRequest):
     if request.method == 'POST':
         form = InventoryItemForm(request.POST)
         if form.is_valid():
-            form.save()
+            item = form.save()
+            from .utils import clear_inventory_cache
+            clear_inventory_cache(item.name, item.brand)
             messages.success(request, 'Inventory item created')
             return redirect('tracker:inventory_list')
         else:
@@ -773,7 +901,9 @@ def inventory_edit(request: HttpRequest, pk: int):
     if request.method == 'POST':
         form = InventoryItemForm(request.POST, instance=item)
         if form.is_valid():
-            form.save()
+            item = form.save()
+            from .utils import clear_inventory_cache
+            clear_inventory_cache(item.name, item.brand)
             messages.success(request, 'Inventory item updated')
             return redirect('tracker:inventory_list')
         else:
@@ -787,7 +917,10 @@ def inventory_edit(request: HttpRequest, pk: int):
 def inventory_delete(request: HttpRequest, pk: int):
     item = get_object_or_404(InventoryItem, pk=pk)
     if request.method == 'POST':
+        from .utils import clear_inventory_cache
+        name, brand = item.name, item.brand
         item.delete()
+        clear_inventory_cache(name, brand)
         messages.success(request, 'Inventory item deleted')
         return redirect('tracker:inventory_list')
     return render(request, 'tracker/inventory_delete.html', { 'item': item })
@@ -1135,30 +1268,38 @@ def reports_advanced(request: HttpRequest):
     else:
         stats['service_percentage'] = stats['sales_percentage'] = stats['consultation_percentage'] = 0
 
-    # Generate sample chart data
-    import random
+    # Real trend data per selected period
+    qs = Order.objects.filter(created_at__date__range=[start_date, end_date])
+    if period == 'daily':
+        from django.db.models.functions import ExtractHour
+        trend_map = {int(r['h'] or 0): r['c'] for r in qs.annotate(h=ExtractHour('created_at')).values('h').annotate(c=Count('id'))}
+        trend_values = [trend_map.get(h, 0) for h in range(24)]
+    elif period == 'weekly':
+        by_date = {r['day']: r['c'] for r in qs.annotate(day=TruncDate('created_at')).values('day').annotate(c=Count('id'))}
+        trend_values = [(by_date.get(start_date + timedelta(days=i), 0)) for i in range(7)]
+    elif period == 'yearly':
+        from django.db.models.functions import ExtractMonth
+        by_month = {int(r['m']): r['c'] for r in qs.annotate(m=ExtractMonth('created_at')).values('m').annotate(c=Count('id'))}
+        trend_values = [by_month.get(i, 0) for i in range(1, 13)]
+    else:  # monthly
+        by_date = {r['day']: r['c'] for r in qs.annotate(day=TruncDate('created_at')).values('day').annotate(c=Count('id'))}
+        trend_values = [(by_date.get(start_date + timedelta(days=i), 0)) for i in range(30)]
+
     chart_data = {
-        'trend': {
-            'labels': labels,
-            'values': [random.randint(5, 25) for _ in labels]
-        },
+        'trend': { 'labels': labels, 'values': trend_values },
         'status': {
             'labels': ['Created', 'Assigned', 'In Progress', 'Completed', 'Cancelled'],
             'values': [
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='created').count(),
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='assigned').count(),
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='in_progress').count(),
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='completed').count(),
-                Order.objects.filter(created_at__date__range=[start_date, end_date], status='cancelled').count(),
+                qs.filter(status='created').count(),
+                qs.filter(status='assigned').count(),
+                qs.filter(status='in_progress').count(),
+                qs.filter(status='completed').count(),
+                qs.filter(status='cancelled').count(),
             ]
         },
         'orders': {
             'labels': ['Service', 'Sales', 'Consultation'],
             'values': [stats['service_orders'], stats['sales_orders'], stats['consultation_orders']]
-        },
-        'growth': {
-            'labels': labels,
-            'values': [random.randint(2, 10) for _ in labels]
         },
         'types': {
             'labels': ['Personal', 'Company', 'Government', 'NGO', 'Bodaboda'],
@@ -1169,18 +1310,6 @@ def reports_advanced(request: HttpRequest):
                 Customer.objects.filter(registration_date__date__range=[start_date, end_date], customer_type='ngo').count(),
                 Customer.objects.filter(registration_date__date__range=[start_date, end_date], customer_type='bodaboda').count(),
             ]
-        },
-        'inquiries': {
-            'labels': labels,
-            'values': [random.randint(1, 8) for _ in labels]
-        },
-        'response': {
-            'labels': labels,
-            'values': [random.uniform(0.5, 4.0) for _ in labels]
-        },
-        'revenue': {
-            'labels': labels,
-            'values': [random.randint(500, 2000) for _ in labels]
         }
     }
 
@@ -1205,6 +1334,61 @@ def reports_advanced(request: HttpRequest):
         'stats': stats,
         'chart_data': json.dumps(chart_data),
         'data_items': data_items,
+        'start_date': start_date.isoformat(),
+        'end_date': end_date.isoformat(),
     }
 
     return render(request, 'tracker/reports_advanced.html', context)
+
+# ---------------------------
+# System settings and admin
+# ---------------------------
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def system_settings(request: HttpRequest):
+    def defaults():
+        return {
+            'company_name': '',
+            'default_priority': 'medium',
+            'enable_unbranded_alias': True,
+            'allow_order_without_vehicle': True,
+            'sms_provider': 'none',
+        }
+    data = cache.get('system_settings', None) or defaults()
+    if request.method == 'POST':
+        form = SystemSettingsForm(request.POST)
+        if form.is_valid():
+            data = {**defaults(), **form.cleaned_data}
+            cache.set('system_settings', data, None)
+            messages.success(request, 'Settings updated')
+            return redirect('tracker:system_settings')
+        else:
+            messages.error(request, 'Please correct errors and try again')
+    else:
+        form = SystemSettingsForm(initial=data)
+    return render(request, 'tracker/system_settings.html', {'form': form, 'settings': data})
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def audit_logs(request: HttpRequest):
+    logs = cache.get('audit_logs', [])
+    return render(request, 'tracker/audit_logs.html', {'logs': logs})
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def backup_restore(request: HttpRequest):
+    if request.GET.get('download'):
+        import json
+        payload = {
+            'system_settings': cache.get('system_settings', {}),
+        }
+        resp = HttpResponse(json.dumps(payload, indent=2), content_type='application/json')
+        resp['Content-Disposition'] = 'attachment; filename="backup.json"'
+        return resp
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'reset_settings':
+            cache.delete('system_settings')
+            messages.success(request, 'System settings have been reset to defaults')
+            return redirect('tracker:backup_restore')
+    return render(request, 'tracker/backup_restore.html')

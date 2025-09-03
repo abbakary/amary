@@ -178,7 +178,7 @@
             </div>
             <h6>Car Service</h6>
             <small class="text-muted">Maintenance, repairs, diagnostics</small>
-            <input type="radio" name="type" value="service" class="d-none">
+            <input type="radio" name="type" value="service" class="d-none" {% if form.type.value == "service" or not form.type.value %}checked{% endif %}>
           </div>
           <div class="type-card" data-type="sales">
             <div class="mb-2">
@@ -186,7 +186,7 @@
             </div>
             <h6>Tire Sales</h6>
             <small class="text-muted">Tires, parts, accessories</small>
-            <input type="radio" name="type" value="sales" class="d-none">
+            <input type="radio" name="type" value="sales" class="d-none" {% if form.type.value == "sales" %}checked{% endif %}>
           </div>
           <div class="type-card" data-type="consultation">
             <div class="mb-2">
@@ -194,7 +194,7 @@
             </div>
             <h6>Consultation</h6>
             <small class="text-muted">Inquiries, pricing, advice</small>
-            <input type="radio" name="type" value="consultation" class="d-none">
+            <input type="radio" name="type" value="consultation" class="d-none" {% if form.type.value == "consultation" %}checked{% endif %}>
           </div>
         </div>
       </div>
@@ -243,7 +243,16 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label class="form-label">Service Selection</label>
-                    {{ form.service_selection }}
+                    <div class="row g-2">
+                      {% for cb in form.service_selection %}
+                        <div class="col-sm-6">
+                          <div class="form-check">
+                            {{ cb.tag }}
+                            <label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
                     <div class="form-text">Select all services needed</div>
                   </div>
                 </div>
@@ -426,36 +435,53 @@
   const typeCards = document.querySelectorAll('.type-card');
   const orderSections = document.querySelectorAll('.order-section');
   
+  function showSection(type){
+    orderSections.forEach(s => {
+      const match = s.getAttribute('data-section') === type;
+      s.style.display = match ? '' : 'none';
+      s.classList.toggle('active', match);
+      s.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled = !match; });
+    });
+    // dynamic requireds
+    const setReq = (sel, req) => { const el = document.querySelector(sel); if (el) el.required = !!req; };
+    setReq('[name="description"]', type==='service');
+    setReq('[name="estimated_duration"]', type==='service');
+    setReq('[name="item_name"]', type==='sales');
+    setReq('[name="brand"]', type==='sales');
+    setReq('[name="quantity"]', type==='sales');
+    setReq('[name="inquiry_type"]', type==='consultation');
+    setReq('[name="questions"]', type==='consultation');
+  }
   typeCards.forEach(card => {
     const radio = card.querySelector('input[type="radio"]');
     card.addEventListener('click', () => {
       // Clear previous selections
       typeCards.forEach(c => c.classList.remove('selected'));
-      orderSections.forEach(s => s.style.display = 'none');
-      
+
       // Select current card
       card.classList.add('selected');
       if (radio) radio.checked = true;
-      
+
       // Show corresponding section
       const type = card.dataset.type;
-      const section = document.querySelector(`[data-section="${type}"]`);
-      if (section) {
-        section.style.display = '';
-        section.classList.add('active');
-      }
+      showSection(type);
     });
     
     // Initialize if already selected
     if (radio?.checked) {
       card.classList.add('selected');
-      const section = document.querySelector(`[data-section="${card.dataset.type}"]`);
-      if (section) {
-        section.style.display = '';
-        section.classList.add('active');
-      }
+      showSection(card.dataset.type);
     }
   });
+
+  // Ensure a default order type is selected
+  const currentType = "{{ form.type.value|default:'service' }}";
+  const anyChecked = Array.from(typeCards).some(c => c.querySelector('input[type="radio"]')?.checked);
+  if (!anyChecked) {
+    const defaultCard = document.querySelector(`.type-card[data-type="${currentType}"]`);
+    if (defaultCard) defaultCard.click();
+    else showSection(currentType);
+  }
 
   // Vehicle preview
   const vehicleSelect = document.querySelector('[name="vehicle"]');
@@ -518,9 +544,23 @@
   async function loadBrands() {
     if (!itemSelect || !brandSelect) return;
     const itemName = itemSelect.value;
-    
+    const buildOptions = (brands) => {
+      const opts = ['<option value="">Select brand</option>'];
+      brands.forEach(b => {
+        const brandName = (b.brand && b.brand.trim()) ? b.brand : 'Unbranded';
+        const qty = typeof b.quantity === 'number' ? b.quantity : 0;
+        opts.push(`<option value="${brandName}" data-qty="${qty}">${brandName} (${qty} available)</option>`);
+      });
+      return opts.join('');
+    };
     if (!itemName) {
-      brandSelect.innerHTML = '<option value="">Select item first</option>';
+      const html = '<option value="">Select item first</option>';
+      if ($ && $.fn.select2) {
+        const $b = $(brandSelect);
+        $b.html(html).val('').trigger('change');
+      } else {
+        brandSelect.innerHTML = html;
+      }
       if (brandStock) brandStock.textContent = 'Choose brand after selecting item';
       return;
     }
@@ -528,17 +568,18 @@
     try {
       const data = await fetchJSON(`{% url 'tracker:api_inventory_brands' %}?name=${encodeURIComponent(itemName)}`);
       const brands = data.brands || [];
-      
-      brandSelect.innerHTML = '<option value="">Select brand</option>' + 
-        brands.map(b => `<option value="${b.brand}">${b.brand} (${b.quantity} available)</option>`).join('');
-      
+      const html = buildOptions(brands);
+
       if ($ && $.fn.select2) {
-        $(brandSelect).trigger('change.select2');
+        const $b = $(brandSelect);
+        $b.html(html).val('').trigger('change');
+      } else {
+        brandSelect.innerHTML = html;
       }
-      
+
       if (brandStock) {
-        brandStock.textContent = brands.length > 0 ? 
-          `${brands.length} brands available` : 'No brands in stock';
+        brandStock.textContent = brands.length > 0 ?
+          `${brands.length} brand${brands.length===1?'':'s'} available` : 'No brands in stock';
       }
     } catch (e) {
       console.warn('Could not load brands:', e);
@@ -593,12 +634,22 @@
       loadBrands();
       checkStock();
     });
+    if ($ && $.fn.select2) {
+      $(itemSelect).on('select2:select', () => { loadBrands(); checkStock(); });
+    }
   }
-  
+
   if (brandSelect) {
-    brandSelect.addEventListener('change', checkStock);
+    brandSelect.addEventListener('change', () => {
+      const opt = brandSelect.options[brandSelect.selectedIndex];
+      const hintEl = document.getElementById('brandStock') || document.getElementById('brand-stock-hint');
+      const q = Number(opt?.dataset?.qty || 0);
+      if (hintEl) hintEl.textContent = opt && brandSelect.value ? `Available: ${q}` : '';
+      checkStock();
+    });
+    brandSelect.addEventListener('focus', () => { if (!brandSelect.options || brandSelect.options.length <= 1) loadBrands(); });
   }
-  
+
   if (qtyInput) {
     qtyInput.addEventListener('input', debounce(checkStock, 300));
   }
@@ -614,16 +665,17 @@
     draftBtn.addEventListener('click', () => {
       const formData = new FormData(form);
       const draftData = {};
-      
+
       for (let [key, value] of formData.entries()) {
+        if (key === 'csrfmiddlewaretoken') continue; // never persist CSRF token
         draftData[key] = value;
       }
-      
+
       localStorage.setItem('order_draft', JSON.stringify({
         data: draftData,
         timestamp: new Date().toISOString()
       }));
-      
+
       // Show feedback
       if (window.bootstrap && document.getElementById('feedbackModal')) {
         document.getElementById('feedbackTitle').textContent = 'Draft Saved';
@@ -639,6 +691,7 @@
     const draft = JSON.parse(localStorage.getItem('order_draft') || '{}');
     if (draft.data) {
       Object.entries(draft.data).forEach(([name, value]) => {
+        if (name === 'csrfmiddlewaretoken') return; // never restore CSRF token
         const input = form.querySelector(`[name="${name}"]`);
         if (input) {
           if (input.type === 'checkbox' || input.type === 'radio') {

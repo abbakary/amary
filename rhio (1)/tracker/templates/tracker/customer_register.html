@@ -184,11 +184,6 @@
               {% endfor %}
               <div class="form-text">Optional - for digital communications</div>
             </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Customer Code</label>
-              {{ form.customer_code }}
-              <div class="form-text">Auto-generated if left empty</div>
-            </div>
             <div class="col-12">
               <label class="form-label fw-semibold">Address</label>
               {{ form.address }}
@@ -258,24 +253,12 @@
           <div class="form-section">
             <h5 class="section-title">
               <i data-feather="tool" class="feather-16"></i>
-              Select Service Type
+              Select Services Needed
             </h5>
-            <div class="service-type-grid">
-              {% for value, label in form.service_type.field.choices %}
-                <div class="service-card" data-service="{{ value }}">
-                  <input class="form-check-input" type="radio" name="service_type" 
-                         id="service_{{ forloop.counter }}" value="{{ value }}" 
-                         {% if form.service_type.value == value %}checked{% endif %}>
-                  <label class="form-check-label ms-2 fw-semibold" for="service_{{ forloop.counter }}">
-                    {{ label }}
-                  </label>
-                  <div class="small text-muted mt-1">
-                    {% if value == 'maintenance' %}Regular service and upkeep
-                    {% elif value == 'repair' %}Fix specific issues or problems
-                    {% else %}Diagnostic and inspection services{% endif %}
-                  </div>
-                </div>
-              {% endfor %}
+            <div class="row g-2">
+              <div class="col-12">
+                {{ form.service_type }}
+              </div>
             </div>
             {% for error in form.service_type.errors %}
               <div class="text-danger small mt-2">{{ error }}</div>
@@ -341,12 +324,12 @@
           </h6>
           <div class="row">
             <div class="col-md-8">
-              <strong>{{ form.full_name.value|default:"Customer Name" }}</strong> - 
-              {{ form.phone.value|default:"Phone Number" }}
-              {% if form.email.value %}<br><small>{{ form.email.value }}</small>{% endif %}
+              <strong>{{ step1.full_name|default:"Customer Name" }}</strong> -
+              {{ step1.phone|default:"Phone Number" }}
+              {% if step1.email %}<br><small>{{ step1.email }}</small>{% endif %}
             </div>
             <div class="col-md-4 text-end">
-              <span class="badge bg-primary">{{ intent|title }} Request</span>
+              <span class="badge bg-primary">{{ intent|default:"service"|title }} Request</span>
             </div>
           </div>
         </div>
@@ -414,8 +397,22 @@
           <!-- Order Basics -->
           <div class="row g-3 mb-3">
             <div class="col-md-4">
-              <label class="form-label fw-semibold">Order Type</label>
-              {{ order_form.type }}
+              {% if intent == 'service' %}
+                <label class="form-label fw-semibold">Request Type</label>
+                <div><span class="badge bg-primary">Service</span></div>
+                <input type="hidden" name="type" value="service">
+              {% elif intent == 'sales' %}
+                <label class="form-label fw-semibold">Request Type</label>
+                <div><span class="badge bg-success">Sales</span></div>
+                <input type="hidden" name="type" value="sales">
+              {% elif intent == 'inquiry' %}
+                <label class="form-label fw-semibold">Request Type</label>
+                <div><span class="badge bg-info text-dark">Consultation</span></div>
+                <input type="hidden" name="type" value="consultation">
+              {% else %}
+                <label class="form-label fw-semibold">Order Type</label>
+                {{ order_form.type }}
+              {% endif %}
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold">Priority Level</label>
@@ -429,88 +426,110 @@
 
           <!-- Order Details Sections -->
           <div class="row g-3">
-            <!-- Service Details -->
-            <div class="col-lg-4">
-              <div id="serviceFields" class="card">
-                <div class="card-header bg-primary text-white">
-                  <h6 class="mb-0">
-                    <i data-feather="tool" class="me-1"></i>Service Details
-                  </h6>
-                </div>
-                <div class="card-body">
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Services Required</label>
-                    {{ order_form.service_selection }}
+            {% if intent == 'service' %}
+              <!-- Service Details -->
+              <div class="col-lg-6">
+                <div id="serviceFields" class="card">
+                  <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">
+                      <i data-feather="tool" class="me-1"></i>Service Details
+                    </h6>
                   </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Problem Description</label>
-                    {{ order_form.description }}
-                  </div>
-                  <div class="mb-0">
-                    <label class="form-label fw-semibold">Estimated Duration (minutes)</label>
-                    {{ order_form.estimated_duration }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Sales Details -->
-            <div class="col-lg-4">
-              <div id="salesFields" class="card">
-                <div class="card-header bg-success text-white">
-                  <h6 class="mb-0">
-                    <i data-feather="shopping-cart" class="me-1"></i>Sales Details
-                  </h6>
-                </div>
-                <div class="card-body">
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Item Name</label>
-                    {{ order_form.item_name }}
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Brand</label>
-                    {{ order_form.brand }}
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Quantity</label>
-                    {{ order_form.quantity }}
-                  </div>
-                  <div class="mb-0">
-                    <label class="form-label fw-semibold">Tire Type</label>
-                    {{ order_form.tire_type }}
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Services Required</label>
+                      <div class="row g-2">
+                        {% for cb in order_form.service_selection %}
+                          <div class="col-sm-6">
+                            <div class="form-check">
+                              {{ cb.tag }}
+                              <label class="form-check-label" for="{{ cb.id_for_label }}">{{ cb.choice_label }}</label>
+                            </div>
+                          </div>
+                        {% endfor %}
+                      </div>
+                      <div class="form-text">Select all services needed</div>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Estimated Duration (minutes)</label>
+                      {{ order_form.estimated_duration }}
+                      <div class="form-text">How long will this take?</div>
+                    </div>
+                    <div class="mb-0">
+                      <label class="form-label fw-semibold">Problem Description</label>
+                      {{ order_form.description }}
+                      <div class="form-text">Describe the issue or service needed</div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <!-- Inquiry Details -->
-            <div class="col-lg-4">
-              <div id="inquiryFields" class="card">
-                <div class="card-header bg-info text-white">
-                  <h6 class="mb-0">
-                    <i data-feather="message-circle" class="me-1"></i>Inquiry Details
-                  </h6>
-                </div>
-                <div class="card-body">
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Inquiry Type</label>
-                    {{ order_form.inquiry_type }}
+            {% elif intent == 'sales' %}
+              <!-- Sales Details -->
+              <div class="col-12">
+                <div id="salesFields" class="card">
+                  <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                      <i data-feather="shopping-cart" class="me-1"></i>Sales Details
+                    </h6>
                   </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Questions</label>
-                    {{ order_form.questions }}
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold">Contact Preference</label>
-                    {{ order_form.contact_preference }}
-                  </div>
-                  <div class="mb-0">
-                    <label class="form-label fw-semibold">Follow-up Date</label>
-                    {{ order_form.follow_up_date }}
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Item Name</label>
+                      {{ order_form.item_name }}
+                    </div>
+                    <div class="mb-1">
+                      <label class="form-label fw-semibold">Brand</label>
+                      {{ order_form.brand }}
+                      <div id="crBrandHint" class="form-text">Choose brand after selecting item</div>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Quantity</label>
+                      {{ order_form.quantity }}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Tire Condition</label>
+                      {{ order_form.tire_type }}
+                    </div>
+                    <div id="crStockInfo" class="alert alert-light border d-flex justify-content-between align-items-center" style="display:none;">
+                      <div>
+                        <small class="fw-semibold">Stock Status:</small>
+                        <span id="crStockText">Checking availability...</span>
+                      </div>
+                      <div id="crStockBadge"></div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            {% elif intent == 'inquiry' %}
+              <!-- Inquiry Details -->
+              <div class="col-lg-6">
+                <div id="inquiryFields" class="card">
+                  <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                      <i data-feather="message-circle" class="me-1"></i>Inquiry Details
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Inquiry Type</label>
+                      {{ order_form.inquiry_type }}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Questions</label>
+                      {{ order_form.questions }}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Contact Preference</label>
+                      {{ order_form.contact_preference }}
+                    </div>
+                    <div class="mb-0">
+                      <label class="form-label fw-semibold">Follow-up Date</label>
+                      {{ order_form.follow_up_date }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
           </div>
         </div>
 
@@ -552,13 +571,14 @@
   
   // Form draft saving
   const form = document.querySelector('form');
-  const step = {{ step|default:1 }};
+  const step = parseInt('{{ step|default:1 }}', 10);
   const key = `customer_reg_draft_step_${step}`;
   
   // Load draft
   try {
     const draft = JSON.parse(localStorage.getItem(key) || '{}');
     Object.entries(draft).forEach(([name, val]) => {
+      if (name === 'csrfmiddlewaretoken') return; // never restore CSRF token
       const el = form.querySelector(`[name="${name}"]`);
       if (!el) return;
       if (el.type === 'checkbox' || el.type === 'radio') {
@@ -575,7 +595,7 @@
   form?.addEventListener('input', debounce(() => {
     const data = {};
     form.querySelectorAll('input, select, textarea').forEach(el => {
-      if (el.name) {
+      if (el.name && el.name !== 'csrfmiddlewaretoken') {
         data[el.name] = (el.type === 'checkbox' || el.type === 'radio') ? el.checked : el.value;
       }
     });
@@ -617,37 +637,137 @@
   const orgFields = document.getElementById('orgFields');
   const personalFields = document.getElementById('personalFields');
   
+  function setDisabled(container, disabled){
+    if (!container) return;
+    container.querySelectorAll('input,select,textarea').forEach(el=>{
+      el.disabled = !!disabled;
+      if (disabled) {
+        if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+        else el.value = '';
+      }
+    });
+  }
   function updateCustomerTypeFields() {
     const type = customerTypeSelect?.value || '';
     const isOrg = ['government', 'ngo', 'company'].includes(type);
     const isPersonal = type === 'personal';
-    
     if (orgFields) {
       orgFields.style.display = isOrg ? '' : 'none';
+      setDisabled(orgFields, !isOrg);
+      const orgName = document.querySelector('[name="organization_name"]');
+      const tax = document.querySelector('[name="tax_number"]');
+      if (orgName) orgName.required = isOrg;
+      if (tax) tax.required = isOrg;
     }
     if (personalFields) {
       personalFields.style.display = isPersonal ? '' : 'none';
+      setDisabled(personalFields, !isPersonal);
+      const subtype = document.querySelector('[name="personal_subtype"]');
+      if (subtype) subtype.required = isPersonal;
     }
   }
   
   customerTypeSelect?.addEventListener('change', updateCustomerTypeFields);
   updateCustomerTypeFields();
   
-  // Order type handling
-  const orderTypeSelect = document.querySelector('[name="type"]');
-  const serviceFields = document.getElementById('serviceFields');
-  const salesFields = document.getElementById('salesFields');
-  const inquiryFields = document.getElementById('inquiryFields');
-  
-  function updateOrderTypeFields() {
-    const type = orderTypeSelect?.value || '';
-    if (serviceFields) serviceFields.style.display = (type === 'service') ? '' : 'none';
-    if (salesFields) salesFields.style.display = (type === 'sales') ? '' : 'none';
-    if (inquiryFields) inquiryFields.style.display = (type === 'consultation') ? '' : 'none';
+  // Required flags based on server intent (no toggling)
+  (function enforceRequiredByIntent(){
+    const t = '{% if intent == "service" %}service{% elif intent == "sales" %}sales{% elif intent == "inquiry" %}consultation{% else %}{% endif %}';
+    const setReq = (sel, req) => { const el = document.querySelector(sel); if (el) el.required = !!req; };
+    setReq('[name="description"]', t==='service');
+    setReq('[name="estimated_duration"]', t==='service');
+    setReq('[name="item_name"]', t==='sales');
+    setReq('[name="brand"]', t==='sales');
+    setReq('[name="quantity"]', t==='sales');
+    setReq('[name="inquiry_type"]', t==='consultation');
+    setReq('[name="questions"]', t==='consultation');
+    if (t==='sales') { loadBrandsCR(); checkStockCR(); }
+  })();
+
+  // Sales: dynamic brands + stock check
+  const crItem = document.querySelector('[name="item_name"]');
+  const crBrand = document.querySelector('[name="brand"]');
+  const crQty = document.querySelector('[name="quantity"]');
+  const crStockInfo = document.getElementById('crStockInfo');
+  const crStockText = document.getElementById('crStockText');
+  const crStockBadge = document.getElementById('crStockBadge');
+  const crBrandHint = document.getElementById('crBrandHint');
+
+  async function fetchJSON(url) {
+    try {
+      const r = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      return await r.json();
+    } catch (e) { console.warn('Fetch error', e); return {}; }
   }
-  
-  orderTypeSelect?.addEventListener('change', updateOrderTypeFields);
-  updateOrderTypeFields();
+
+  async function loadBrandsCR() {
+    if (!crItem || !crBrand) return;
+    const name = crItem.value;
+    const buildOptions = (brands)=>{
+      const opts = ['<option value="">Select brand</option>'];
+      brands.forEach(b=>{
+        const brandName = (b.brand && b.brand.trim()) ? b.brand : 'Unbranded';
+        const qty = typeof b.quantity === 'number' ? b.quantity : 0;
+        opts.push(`<option value="${brandName}">${brandName} (${qty} available)</option>`);
+      });
+      return opts.join('');
+    };
+    if (!name) {
+      const html = '<option value="">Select item first</option>';
+      if (window.jQuery && jQuery.fn.select2) {
+        const $b = jQuery(crBrand);
+        $b.html(html).val('').trigger('change');
+      } else {
+        crBrand.innerHTML = html;
+      }
+      if (crBrandHint) crBrandHint.textContent = 'Choose brand after selecting item';
+      return;
+    }
+    const data = await fetchJSON('{% url 'tracker:api_inventory_brands' %}?name=' + encodeURIComponent(name));
+    const brands = data.brands || [];
+    const html = buildOptions(brands);
+    if (window.jQuery && jQuery.fn.select2) {
+      const $b = jQuery(crBrand);
+      $b.html(html).val('').trigger('change');
+    } else {
+      crBrand.innerHTML = html;
+    }
+    if (crBrandHint) crBrandHint.textContent = brands.length ? `${brands.length} brands available` : 'No brands in stock';
+  }
+
+  async function checkStockCR() {
+    if (!crItem || !crBrand || !crStockInfo) return;
+    const name = crItem.value;
+    const brand = crBrand.value;
+    const qty = parseInt(crQty?.value || 1);
+    if (!name || !brand) { crStockInfo.style.display = 'none'; return; }
+    const params = new URLSearchParams({ name, brand });
+    const data = await fetchJSON('{% url 'tracker:api_inventory_stock' %}?' + params.toString());
+    const available = data.available || 0;
+    crStockText.textContent = `${available} units available`;
+    let klass = 'badge ';
+    let text = '';
+    if (available === 0) { klass += 'bg-danger'; text = 'Out of Stock'; }
+    else if (available < qty) { klass += 'bg-warning text-dark'; text = 'Insufficient Stock'; }
+    else if (available < 5) { klass += 'bg-warning text-dark'; text = 'Low Stock'; }
+    else { klass += 'bg-success'; text = 'In Stock'; }
+    crStockBadge.innerHTML = `<span class="${klass}">${text}</span>`;
+    crStockInfo.style.display = '';
+  }
+
+  crItem?.addEventListener('change', () => { loadBrandsCR(); checkStockCR(); });
+  if (window.jQuery && jQuery.fn.select2 && crItem) {
+    jQuery(crItem).on('select2:select', () => { loadBrandsCR(); checkStockCR(); });
+  }
+  crBrand?.addEventListener('change', checkStockCR);
+  if (crBrand) {
+    crBrand.addEventListener('focus', () => { if (!crBrand.options || crBrand.options.length <= 1) loadBrandsCR(); });
+  }
+  crQty?.addEventListener('input', debounce(checkStockCR, 300));
+
+  // Initialize if prefilled
+  loadBrandsCR();
+  checkStockCR();
   
   // Utility function
   function debounce(func, wait) {
