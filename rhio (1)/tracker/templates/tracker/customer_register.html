@@ -433,14 +433,17 @@
                         </div>
                       {% endfor %}
                     </div>
+                    <div class="form-text">Select all services needed</div>
                   </div>
                   <div class="mb-3">
-                    <label class="form-label fw-semibold">Problem Description</label>
-                    {{ order_form.description }}
-                  </div>
-                  <div class="mb-0">
                     <label class="form-label fw-semibold">Estimated Duration (minutes)</label>
                     {{ order_form.estimated_duration }}
+                    <div class="form-text">How long will this take?</div>
+                  </div>
+                  <div class="mb-0">
+                    <label class="form-label fw-semibold">Problem Description</label>
+                    {{ order_form.description }}
+                    <div class="form-text">Describe the issue or service needed</div>
                   </div>
                 </div>
               </div>
@@ -634,10 +637,16 @@
     if (orgFields) {
       orgFields.style.display = isOrg ? '' : 'none';
       setDisabled(orgFields, !isOrg);
+      const orgName = document.querySelector('[name="organization_name"]');
+      const tax = document.querySelector('[name="tax_number"]');
+      if (orgName) orgName.required = isOrg;
+      if (tax) tax.required = isOrg;
     }
     if (personalFields) {
       personalFields.style.display = isPersonal ? '' : 'none';
       setDisabled(personalFields, !isPersonal);
+      const subtype = document.querySelector('[name="personal_subtype"]');
+      if (subtype) subtype.required = isPersonal;
     }
   }
   
@@ -660,6 +669,21 @@
     toggleSection(serviceFields, t === 'service');
     toggleSection(salesFields, t === 'sales');
     toggleSection(inquiryFields, t === 'consultation');
+    // dynamic requireds
+    const desc = document.querySelector('[name="description"]');
+    const est = document.querySelector('[name="estimated_duration"]');
+    if (desc) desc.required = (t === 'service');
+    if (est) est.required = (t === 'service');
+    const item = document.querySelector('[name="item_name"]');
+    const brand = document.querySelector('[name="brand"]');
+    const qty = document.querySelector('[name="quantity"]');
+    if (item) item.required = (t === 'sales');
+    if (brand) brand.required = (t === 'sales');
+    if (qty) qty.required = (t === 'sales');
+    const inqType = document.querySelector('[name="inquiry_type"]');
+    const questions = document.querySelector('[name="questions"]');
+    if (inqType) inqType.required = (t === 'consultation');
+    if (questions) questions.required = (t === 'consultation');
     if (t === 'sales') { loadBrandsCR(); checkStockCR(); }
   }
 
