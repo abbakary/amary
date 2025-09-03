@@ -427,7 +427,12 @@ def order_start(request: HttpRequest):
             form = OrderForm()
             form.fields['vehicle'].queryset = c.vehicles.all()
             return render(request, "tracker/order_create.html", {"customer": c, "form": form})
-        return render(request, "tracker/order_create.html")
+        form = OrderForm()
+        try:
+            form.fields['vehicle'].queryset = Vehicle.objects.none()
+        except Exception:
+            pass
+        return render(request, "tracker/order_create.html", {"form": form})
 
     # Handle POST (AJAX or standard form submit)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
