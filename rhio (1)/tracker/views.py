@@ -799,33 +799,51 @@ def api_inventory_brands(request: HttpRequest):
     cache_key = f"api_inv_brands_{name}"
     data = cache.get(cache_key)
     if not data:
+        # Aggregate by brand for this item
         rows = (
             InventoryItem.objects.filter(name=name)
             .values("brand")
             .annotate(quantity=Sum("quantity"), min_price=Min("price"))
             .order_by("brand")
         )
-        brands = [
-            {"brand": r["brand"] or "", "quantity": r["quantity"] or 0, "price": str(r["min_price"]) if r["min_price"] is not None else ""}
-            for r in rows
-        ]
+        non_empty = []
+        unbranded_qty = 0
+        unbranded_price = None
+        for r in rows:
+            b = (r["brand"] or "").strip()
+            q = r["quantity"] or 0
+            p = r["min_price"]
+            if b:
+                non_empty.append({"brand": b, "quantity": q, "price": str(p) if p is not None else ""})
+            else:
+                unbranded_qty += q
+                if p is not None:
+                    unbranded_price = p if unbranded_price is None else min(unbranded_price, p)
+        brands = non_empty
+        # If only unbranded inventory exists, expose a friendly option
+        if not brands and unbranded_qty > 0:
+            brands = [{"brand": "Unbranded", "quantity": unbranded_qty, "price": str(unbranded_price) if unbranded_price is not None else ""}]
         data = {"brands": brands}
         cache.set(cache_key, data, 120)
     return JsonResponse(data)
 
 @login_required
 def api_inventory_stock(request: HttpRequest):
-    from django.db.models import Sum
+    from django.db.models import Sum, Q
     name = request.GET.get("name", "").strip()
     brand = request.GET.get("brand", "").strip()
     if not name:
         return JsonResponse({"available": 0})
-    cache_key = f"api_inv_stock_{name}_{brand or 'any'}"
+    # Treat special alias 'Unbranded' as brand is empty or null
+    effective_brand = None if brand.lower() == 'unbranded' else brand
+    cache_key = f"api_inv_stock_{name}_{(effective_brand or 'any')}"
     data = cache.get(cache_key)
     if data is None:
         qs = InventoryItem.objects.filter(name=name)
-        if brand:
-            qs = qs.filter(brand=brand)
+        if effective_brand is not None and effective_brand != "":
+            qs = qs.filter(brand=effective_brand)
+        elif brand.lower() == 'unbranded':
+            qs = qs.filter(Q(brand__isnull=True) | Q(brand=""))
         total = qs.aggregate(total=Sum("quantity")).get("total") or 0
         data = {"available": total}
         cache.set(cache_key, data, 60)
