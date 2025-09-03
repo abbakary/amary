@@ -827,9 +827,13 @@ def api_inventory_brands(request: HttpRequest):
                 if p is not None:
                     unbranded_price = p if unbranded_price is None else min(unbranded_price, p)
         brands = non_empty
-        # If only unbranded inventory exists, expose a friendly option
-        if not brands and unbranded_qty > 0:
-            brands = [{"brand": "Unbranded", "quantity": unbranded_qty, "price": str(unbranded_price) if unbranded_price is not None else ""}]
+        # Always include an aggregated Unbranded option when quantity exists
+        if unbranded_qty > 0:
+            brands.append({
+                "brand": "Unbranded",
+                "quantity": unbranded_qty,
+                "price": str(unbranded_price) if unbranded_price is not None else ""
+            })
         data = {"brands": brands}
         cache.set(cache_key, data, 120)
     return JsonResponse(data)
