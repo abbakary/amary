@@ -806,7 +806,9 @@ def inventory_create(request: HttpRequest):
     if request.method == 'POST':
         form = InventoryItemForm(request.POST)
         if form.is_valid():
-            form.save()
+            item = form.save()
+            from .utils import clear_inventory_cache
+            clear_inventory_cache(item.name, item.brand)
             messages.success(request, 'Inventory item created')
             return redirect('tracker:inventory_list')
         else:
@@ -823,7 +825,9 @@ def inventory_edit(request: HttpRequest, pk: int):
     if request.method == 'POST':
         form = InventoryItemForm(request.POST, instance=item)
         if form.is_valid():
-            form.save()
+            item = form.save()
+            from .utils import clear_inventory_cache
+            clear_inventory_cache(item.name, item.brand)
             messages.success(request, 'Inventory item updated')
             return redirect('tracker:inventory_list')
         else:
@@ -837,7 +841,10 @@ def inventory_edit(request: HttpRequest, pk: int):
 def inventory_delete(request: HttpRequest, pk: int):
     item = get_object_or_404(InventoryItem, pk=pk)
     if request.method == 'POST':
+        from .utils import clear_inventory_cache
+        name, brand = item.name, item.brand
         item.delete()
+        clear_inventory_cache(name, brand)
         messages.success(request, 'Inventory item deleted')
         return redirect('tracker:inventory_list')
     return render(request, 'tracker/inventory_delete.html', { 'item': item })
