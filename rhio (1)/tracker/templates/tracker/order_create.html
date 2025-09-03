@@ -626,7 +626,14 @@
   }
   
   if (brandSelect) {
-    brandSelect.addEventListener('change', checkStock);
+    brandSelect.addEventListener('change', () => {
+      // Immediate hint from selected option's data-qty
+      const opt = brandSelect.options[brandSelect.selectedIndex];
+      const hintEl = document.getElementById('brandStock') || document.getElementById('brand-stock-hint');
+      const q = Number(opt?.dataset?.qty || 0);
+      if (hintEl) hintEl.textContent = opt && brandSelect.value ? `Available: ${q}` : '';
+      checkStock();
+    });
   }
   
   if (qtyInput) {
