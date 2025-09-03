@@ -1305,6 +1305,8 @@ def reports_advanced(request: HttpRequest):
         'stats': stats,
         'chart_data': json.dumps(chart_data),
         'data_items': data_items,
+        'start_date': start_date.isoformat(),
+        'end_date': end_date.isoformat(),
     }
 
     return render(request, 'tracker/reports_advanced.html', context)
