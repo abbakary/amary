@@ -617,16 +617,27 @@
   const orgFields = document.getElementById('orgFields');
   const personalFields = document.getElementById('personalFields');
   
+  function setDisabled(container, disabled){
+    if (!container) return;
+    container.querySelectorAll('input,select,textarea').forEach(el=>{
+      el.disabled = !!disabled;
+      if (disabled) {
+        if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+        else el.value = '';
+      }
+    });
+  }
   function updateCustomerTypeFields() {
     const type = customerTypeSelect?.value || '';
     const isOrg = ['government', 'ngo', 'company'].includes(type);
     const isPersonal = type === 'personal';
-    
     if (orgFields) {
       orgFields.style.display = isOrg ? '' : 'none';
+      setDisabled(orgFields, !isOrg);
     }
     if (personalFields) {
       personalFields.style.display = isPersonal ? '' : 'none';
+      setDisabled(personalFields, !isPersonal);
     }
   }
   
@@ -639,15 +650,17 @@
   const salesFields = document.getElementById('salesFields');
   const inquiryFields = document.getElementById('inquiryFields');
 
+  function toggleSection(section, show){
+    if (!section) return;
+    section.style.display = show ? '' : 'none';
+    section.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled = !show; });
+  }
   function updateOrderTypeFields() {
     const t = orderTypeSelect?.value;
-    if (serviceFields) serviceFields.style.display = (t === 'service') ? '' : 'none';
-    if (salesFields) salesFields.style.display = (t === 'sales') ? '' : 'none';
-    if (inquiryFields) inquiryFields.style.display = (t === 'consultation') ? '' : 'none';
-    if (t === 'sales') {
-      loadBrandsCR();
-      checkStockCR();
-    }
+    toggleSection(serviceFields, t === 'service');
+    toggleSection(salesFields, t === 'sales');
+    toggleSection(inquiryFields, t === 'consultation');
+    if (t === 'sales') { loadBrandsCR(); checkStockCR(); }
   }
 
   orderTypeSelect?.addEventListener('change', updateOrderTypeFields);
