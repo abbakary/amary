@@ -465,7 +465,7 @@
               </div>
             {% elif intent == 'sales' %}
               <!-- Sales Details -->
-              <div class="col-lg-6">
+              <div class="col-12">
                 <div id="salesFields" class="card">
                   <div class="card-header bg-success text-white">
                     <h6 class="mb-0">
@@ -670,43 +670,19 @@
   customerTypeSelect?.addEventListener('change', updateCustomerTypeFields);
   updateCustomerTypeFields();
   
-  // Order type handling
-  const orderTypeSelect = document.querySelector('[name="type"]');
-  const serviceFields = document.getElementById('serviceFields');
-  const salesFields = document.getElementById('salesFields');
-  const inquiryFields = document.getElementById('inquiryFields');
-  const intentType = '{% if intent == "service" %}service{% elif intent == "sales" %}sales{% elif intent == "inquiry" %}consultation{% else %}{% endif %}';
-
-  function toggleSection(section, show){
-    if (!section) return;
-    section.style.display = show ? '' : 'none';
-    section.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled = !show; });
-  }
-  function updateOrderTypeFields() {
-    const t = orderTypeSelect?.value || intentType;
-    toggleSection(serviceFields, t === 'service');
-    toggleSection(salesFields, t === 'sales');
-    toggleSection(inquiryFields, t === 'consultation');
-    // dynamic requireds
-    const desc = document.querySelector('[name="description"]');
-    const est = document.querySelector('[name="estimated_duration"]');
-    if (desc) desc.required = (t === 'service');
-    if (est) est.required = (t === 'service');
-    const item = document.querySelector('[name="item_name"]');
-    const brand = document.querySelector('[name="brand"]');
-    const qty = document.querySelector('[name="quantity"]');
-    if (item) item.required = (t === 'sales');
-    if (brand) brand.required = (t === 'sales');
-    if (qty) qty.required = (t === 'sales');
-    const inqType = document.querySelector('[name="inquiry_type"]');
-    const questions = document.querySelector('[name="questions"]');
-    if (inqType) inqType.required = (t === 'consultation');
-    if (questions) questions.required = (t === 'consultation');
-    if (t === 'sales') { loadBrandsCR(); checkStockCR(); }
-  }
-
-  if (orderTypeSelect) orderTypeSelect.addEventListener('change', updateOrderTypeFields);
-  updateOrderTypeFields();
+  // Required flags based on server intent (no toggling)
+  (function enforceRequiredByIntent(){
+    const t = '{% if intent == "service" %}service{% elif intent == "sales" %}sales{% elif intent == "inquiry" %}consultation{% else %}{% endif %}';
+    const setReq = (sel, req) => { const el = document.querySelector(sel); if (el) el.required = !!req; };
+    setReq('[name="description"]', t==='service');
+    setReq('[name="estimated_duration"]', t==='service');
+    setReq('[name="item_name"]', t==='sales');
+    setReq('[name="brand"]', t==='sales');
+    setReq('[name="quantity"]', t==='sales');
+    setReq('[name="inquiry_type"]', t==='consultation');
+    setReq('[name="questions"]', t==='consultation');
+    if (t==='sales') { loadBrandsCR(); checkStockCR(); }
+  })();
 
   // Sales: dynamic brands + stock check
   const crItem = document.querySelector('[name="item_name"]');
