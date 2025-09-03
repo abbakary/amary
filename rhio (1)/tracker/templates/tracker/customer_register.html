@@ -397,8 +397,22 @@
           <!-- Order Basics -->
           <div class="row g-3 mb-3">
             <div class="col-md-4">
-              <label class="form-label fw-semibold">Order Type</label>
-              {{ order_form.type }}
+              {% if intent == 'service' %}
+                <label class="form-label fw-semibold">Request Type</label>
+                <div><span class="badge bg-primary">Service</span></div>
+                <input type="hidden" name="type" value="service">
+              {% elif intent == 'sales' %}
+                <label class="form-label fw-semibold">Request Type</label>
+                <div><span class="badge bg-success">Sales</span></div>
+                <input type="hidden" name="type" value="sales">
+              {% elif intent == 'inquiry' %}
+                <label class="form-label fw-semibold">Request Type</label>
+                <div><span class="badge bg-info text-dark">Consultation</span></div>
+                <input type="hidden" name="type" value="consultation">
+              {% else %}
+                <label class="form-label fw-semibold">Order Type</label>
+                {{ order_form.type }}
+              {% endif %}
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold">Priority Level</label>
@@ -659,6 +673,7 @@
   const serviceFields = document.getElementById('serviceFields');
   const salesFields = document.getElementById('salesFields');
   const inquiryFields = document.getElementById('inquiryFields');
+  const intentType = '{% if intent == "service" %}service{% elif intent == "sales" %}sales{% elif intent == "inquiry" %}consultation{% else %}{% endif %}';
 
   function toggleSection(section, show){
     if (!section) return;
@@ -666,7 +681,7 @@
     section.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled = !show; });
   }
   function updateOrderTypeFields() {
-    const t = orderTypeSelect?.value;
+    const t = orderTypeSelect?.value || intentType;
     toggleSection(serviceFields, t === 'service');
     toggleSection(salesFields, t === 'sales');
     toggleSection(inquiryFields, t === 'consultation');
@@ -688,7 +703,7 @@
     if (t === 'sales') { loadBrandsCR(); checkStockCR(); }
   }
 
-  orderTypeSelect?.addEventListener('change', updateOrderTypeFields);
+  if (orderTypeSelect) orderTypeSelect.addEventListener('change', updateOrderTypeFields);
   updateOrderTypeFields();
 
   // Sales: dynamic brands + stock check
